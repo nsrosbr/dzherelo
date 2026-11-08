@@ -16,7 +16,7 @@ internal sealed class MainForm : ThemedForm
 
     private Button _btnRun = null!, _btnStop = null!, _btnBrowse = null!, _btnOpen = null!, _btnReport = null!, _btnBrowser = null!, _btnLog = null!, _btnSettings = null!;
     private CheckBox _chkNew = null!;
-    private NumericUpDown _numSince = null!;
+    private TextBox _txtSince = null!;
     private TextBox _txtOut = null!, _txtLog = null!;
     private TreeView _tree = null!;
     private ListView _list = null!;
@@ -28,7 +28,7 @@ internal sealed class MainForm : ThemedForm
     private Button _segSources = null!, _segTopics = null!, _segDocs = null!;
     private ListView _docs = null!;
     private CheckBox _onlySel = null!;
-    private Label _lblDocsCount = null!;
+    private Label _lblDocsCount = null!, _lblDocsTitle = null!;
     private readonly List<(string T, string Src, string Url, string St, long Bytes)> _docRows = new();
     private const int DocRowsMax = 3000;
     private Label _lblSubtitle = null!;
@@ -51,6 +51,7 @@ internal sealed class MainForm : ThemedForm
             if (_txtOut.Text.Length == 0) _txtOut.Text = root;
             _taskbar.Attach(Handle);
             _tree.ExpandAll();
+            UpdateRunLabel();
             LayoutSplitters();
             Log("Готово. Познач джерела й натисни «ЗІБРАТИ».");
             Log("Стан колекції: " + CountCollection());
@@ -95,12 +96,12 @@ internal sealed class MainForm : ThemedForm
             Margin = new Padding(20, 11, 0, 0), ForeColor = Theme.TextPrimary,
         };
         var lblSince = new Label { Text = "з року:", AutoSize = true, Font = Theme.Body, Margin = new Padding(18, 11, 4, 0), ForeColor = Theme.TextSecondary };
-        _numSince = new NumericUpDown
-        {
-            Minimum = 1990, Maximum = 2035, Value = 2022, Width = 72, Font = Theme.Body,
-            Margin = new Padding(0, 7, 0, 0), BorderStyle = BorderStyle.FixedSingle,
-        };
-        bar.Controls.AddRange(new Control[] { _btnRun, _btnStop, _btnSettings, _btnOpen, _btnReport, _btnLog, _btnBrowser, lblSince, _numSince, _chkNew });
+        // NumericUpDown у темній темі лишається білим (його малює візуальний стиль) —
+        // тому рік вводиться звичайним полем, яке ми вже вміємо фарбувати.
+        _txtSince = new TextBox { Text = "2022", Width = 64, Height = 24, Margin = new Padding(0, 7, 0, 0), MaxLength = 4 };
+        Ui.StyleInput(_txtSince);
+        _txtSince.KeyPress += (_, e) => { if (!char.IsControl(e.KeyChar) && !char.IsDigit(e.KeyChar)) e.Handled = true; };
+        bar.Controls.AddRange(new Control[] { _btnRun, _btnStop, _btnSettings, _btnOpen, _btnReport, _btnLog, _btnBrowser, lblSince, _txtSince, _chkNew });
 
         // ---- тека колекції ----
         var pathRow = new Panel { Dock = DockStyle.Top, Height = 88, Padding = new Padding(18, 0, 18, 10), BackColor = Theme.PageBg };
@@ -178,7 +179,16 @@ internal sealed class MainForm : ThemedForm
         _right.Panel2.Controls.Add(CardOf("Журнал", _txtLog));
 
         _body = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Vertical, SplitterWidth = 8, BackColor = Theme.PageBg };
-        _body.Panel1.Controls.Add(CardOf("Джерела", _tree));
+        var treeCard = new Card { Dock = DockStyle.Fill, Padding = new Padding(14, 10, 14, 10) };
+        var treeTitle = Ui.Caption("Джерела", 0, 0, 300);
+        treeTitle.Dock = DockStyle.Top; treeTitle.Height = 20;
+        var treeHint = Ui.Caption("☑ — у збір · вибір рядка — фільтр «Документів»", 0, 0, 420);
+        treeHint.Dock = DockStyle.Bottom; treeHint.Height = 18;
+        _tree.Dock = DockStyle.Fill;
+        treeCard.Controls.Add(_tree);
+        treeCard.Controls.Add(treeHint);
+        treeCard.Controls.Add(treeTitle);
+        _body.Panel1.Controls.Add(treeCard);
         _body.Panel2.Controls.Add(_right);
 
         _pageSources = new Panel { Dock = DockStyle.Fill, BackColor = Theme.PageBg };
@@ -190,7 +200,14 @@ internal sealed class MainForm : ThemedForm
         host.Controls.Add(_pageSources);
         host.Controls.Add(_pageTopics);
         _pageDocs = new Panel { Dock = DockStyle.Fill, BackColor = Theme.PageBg, Visible = false };
-        _pageDocs.Controls.Add(CardOf("Документи — що знайдено і що качається", _docs));
+        var docsCard = new Card { Dock = DockStyle.Fill, Padding = new Padding(14, 10, 14, 12) };
+        _lblDocsTitle = Ui.Caption("Документи — усе", 0, 0, 600);
+        _lblDocsTitle.Dock = DockStyle.Top;
+        _lblDocsTitle.Height = 20;
+        _docs.Dock = DockStyle.Fill;
+        docsCard.Controls.Add(_docs);
+        docsCard.Controls.Add(_lblDocsTitle);
+        _pageDocs.Controls.Add(docsCard);
         host.Controls.Add(_pageDocs);
 
         // Docking застосовується від останнього доданого — тому контент додаємо ПЕРШИМ,
@@ -199,7 +216,7 @@ internal sealed class MainForm : ThemedForm
 
         // ---- підвал: прогрес + стан ----
         var bottom = new Panel { Dock = DockStyle.Bottom, Height = 40, Padding = new Padding(18, 4, 18, 6), BackColor = Theme.PageBg };
-        _prog = new ProgressBar { Dock = DockStyle.Bottom, Height = 6, Style = ProgressBarStyle.Continuous };
+        _prog = new ProgressBar { Dock = DockStyle.Bottom, Height = 6, Style = ProgressBarStyle.Continuous, BackColor = Theme.PageBg };
         var lblHelp = new Label
         {
             Dock = DockStyle.Fill, Font = Theme.Caption, ForeColor = Theme.TextSecondary,
@@ -232,6 +249,31 @@ internal sealed class MainForm : ThemedForm
         _btnSettings.Click += (_, _) => OpenSettings();
         _btnLog.Click += (_, _) => SaveLog(openAfter: true);
         _tree.AfterCheck += TreeAfterCheck;
+        _list.Resize += (_, _) => Ui.FillLastColumn(_list, 220);
+        _topics.Resize += (_, _) => Ui.FillLastColumn(_topics, 220);
+        _docs.Resize += (_, _) => Ui.FillLastColumn(_docs, 300);
+        // вибрав джерело в дереві → одразу бачу ЙОГО документи
+        var treeMenu = new ContextMenuStrip();
+        var miRunOne = new ToolStripMenuItem("Зібрати лише це джерело");
+        miRunOne.Click += async (_, _) =>
+        {
+            if (_tree.SelectedNode?.Tag is not Source s) return;
+            foreach (var kv in _nodes) if (kv.Value.Tag != null) kv.Value.Checked = kv.Key == s.Id;
+            UpdateRunLabel();
+            await RunAsync();
+        };
+        var miShowDocs = new ToolStripMenuItem("Показати документи");
+        miShowDocs.Click += (_, _) => { SetPage(2); RebuildDocs(); };
+        treeMenu.Items.Add(miRunOne);
+        treeMenu.Items.Add(miShowDocs);
+        _tree.ContextMenuStrip = treeMenu;
+
+        _tree.AfterSelect += (_, e) =>
+        {
+            if (e.Node is null || e.Node.Tag is null) { _lblDocsTitle.Text = "Документи — усе"; return; }
+            _onlySel.Checked = true;
+            RebuildDocs();
+        };
         _txtOut.Leave += (_, _) => { _settings.OutputDir = _txtOut.Text.Trim(); _settings.Save(); };
         SetPage(0);
     }
@@ -306,6 +348,9 @@ internal sealed class MainForm : ThemedForm
 
     private void RebuildDocs()
     {
+        var sel = SelectedSourceName();
+        if (_lblDocsTitle != null)
+            _lblDocsTitle.Text = sel.Length == 0 ? "Документи — усе" : "Документи — " + sel;
         _docs.BeginUpdate();
         _docs.Items.Clear();
         var selected = SelectedSourceName();
@@ -354,7 +399,7 @@ internal sealed class MainForm : ThemedForm
         // Параметри збережено всередині діалогу — підхоплюємо те, що впливає на головне вікно.
         var cur = AppSettings.Load();
         _txtOut.Text = cur.OutputDir ?? "";
-        _numSince.Value = Math.Clamp(cur.SinceYear, 1990, 2030);
+        _txtSince.Text = Math.Clamp(cur.SinceYear, 1990, 2030).ToString();
         ApplyTheme();
         Log("Параметри збережено.");
     }
@@ -399,13 +444,25 @@ internal sealed class MainForm : ThemedForm
         _lblState.Text = $"{_sources.Count} джерел у {_tree.Nodes.Count} розділах";
     }
 
+    private int SinceYearValue() =>
+        int.TryParse(_txtSince.Text.Trim(), out var y) && y >= 1990 && y <= 2035 ? y : 2022;
+
+    private int CountChecked() => _nodes.Values.Count(n => n.Tag != null && n.Checked);
+
+    private void UpdateRunLabel()
+    {
+        int n = CountChecked();
+        _btnRun.Text = n > 0 ? "ЗІБРАТИ (" + n + ")" : "ЗІБРАТИ";
+    }
+
     private void TreeAfterCheck(object? sender, TreeViewEventArgs e)
     {
         if (e.Action == TreeViewAction.Unknown) return;
-        if (e.Node?.Tag != null) return; // leaf: leave as is
+        if (e.Node?.Tag != null) { UpdateRunLabel(); return; }   // лист: рахуємо позначені
         _tree.AfterCheck -= TreeAfterCheck;
         if (e.Node != null) foreach (TreeNode c in e.Node.Nodes) c.Checked = e.Node.Checked;
         _tree.AfterCheck += TreeAfterCheck;
+        UpdateRunLabel();
     }
 
     private List<Source> Picked() =>
@@ -442,19 +499,20 @@ internal sealed class MainForm : ThemedForm
         var picked = Picked();
         if (picked.Count == 0)
         {
-            MessageBox.Show("Познач хоча б одне джерело.", "Dzherelo");
+            Ui.Msg("Познач хоча б одне джерело (галочка ліворуч) або правий клік → «Зібрати лише це».", Ui.Name, MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
         var root = _txtOut.Text.Trim();
         if (root.Length == 0)
         {
-            MessageBox.Show("Вкажи теку, куди збирати.", "Dzherelo");
+            Ui.Msg("Вкажи теку, куди збирати.", Ui.Name, MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
         Directory.CreateDirectory(root);
         _settings.OutputDir = root;
         _settings.Save();
 
+        SetPage(2);            // «що качається» — одразу на очах
         _results.Clear();
         _list.Items.Clear();
         _running = true;
@@ -480,7 +538,7 @@ internal sealed class MainForm : ThemedForm
         using var fetch = new Fetcher(Path.Combine(root, "state")) { MinIntervalMs = 1000 };
         var harvester = new Harvester
         {
-            SinceYear = (int)_numSince.Value,
+            SinceYear = SinceYearValue(),
             NewOnly = _chkNew.Checked,
             OnLog = Log,
             OnProgress = (done, total) => RunOnUi(() =>
@@ -560,10 +618,10 @@ internal sealed class MainForm : ThemedForm
         item.SubItems.Add(r.Note);
         item.ForeColor = r.Status switch
         {
-            SourceStatus.Ok => Color.FromArgb(20, 110, 40),
-            SourceStatus.Empty => Color.DimGray,
-            SourceStatus.Partial => Color.FromArgb(170, 100, 0),
-            _ => Color.FromArgb(170, 30, 30),
+            SourceStatus.Ok => Theme.IsDark ? Color.FromArgb(120, 200, 130) : Color.FromArgb(20, 110, 40),
+            SourceStatus.Empty => Theme.TextSecondary,
+            SourceStatus.Partial => Theme.IsDark ? Color.FromArgb(230, 180, 110) : Color.FromArgb(170, 100, 0),
+            _ => Theme.IsDark ? Color.FromArgb(235, 130, 130) : Color.FromArgb(170, 30, 30),
         };
         _list.Items.Add(item);
 
@@ -656,7 +714,7 @@ internal sealed class MainForm : ThemedForm
             sb.AppendLine("машина: " + Environment.MachineName + " | .NET " + Environment.Version);
             sb.AppendLine("тека: " + App.Root(_txtOut.Text));
             sb.AppendLine("прогін: " + (_lastRunId.Length > 0 ? _lastRunId : "—"));
-            sb.AppendLine("з року: " + _numSince.Value + " | лише нове: " + _chkNew.Checked
+            sb.AppendLine("з року: " + SinceYearValue() + " | лише нове: " + _chkNew.Checked
                           + " | джерел позначено: " + Picked().Count);
             sb.AppendLine();
             sb.AppendLine("--- журнал ---");

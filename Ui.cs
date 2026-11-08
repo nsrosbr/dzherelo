@@ -449,7 +449,18 @@ namespace Dzherelo
         }
 
         // Open an external URL in the default browser (blog / donation links).
-        // Системний ListView у темній темі лишає СВІТЛІ/СИНІ заголовки: малюємо самі.
+        // Шапка ListView малюється по колонках; праворуч від останньої лишається системна смуга.
+    // Тягнемо останню колонку на всю ширину — тоді смуги немає.
+    public static void FillLastColumn(ListView lv, int min = 160)
+    {
+        if (lv.Columns.Count == 0) return;
+        int used = 0;
+        for (int i = 0; i < lv.Columns.Count - 1; i++) used += lv.Columns[i].Width;
+        int rest = lv.ClientSize.Width - used - 2;
+        lv.Columns[^1].Width = Math.Max(min, rest);
+    }
+
+    // Системний ListView у темній темі лишає СВІТЛІ/СИНІ заголовки: малюємо самі.
     public static void ThemeListView(ListView lv)
     {
         if ((lv.Tag as string) == "themed-list") { lv.Invalidate(); return; }
@@ -554,6 +565,7 @@ namespace Dzherelo
     {
         if (!pb.IsHandleCreated) { pb.HandleCreated += (_, _) => SetProgressColors(pb); return; }
         const int PBM_SETBARCOLOR = 0x0409, PBM_SETBKCOLOR = 0x2001;
+        try { SetWindowTheme(pb.Handle, "", ""); } catch { }   // інакше візуальний стиль малює білу смугу
         SendMessage(pb.Handle, PBM_SETBARCOLOR, IntPtr.Zero, (IntPtr)ColorTranslator.ToWin32(Theme.Accent));
         SendMessage(pb.Handle, PBM_SETBKCOLOR, IntPtr.Zero, (IntPtr)ColorTranslator.ToWin32(Theme.ControlBg));
     }

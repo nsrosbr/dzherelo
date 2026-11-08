@@ -10,7 +10,7 @@ internal sealed class SettingsForm : ThemedForm
 
     private ToggleSwitch _cUpdates = null!;
     private TextBox _txtOut = null!, _txtKey = null!;
-    private NumericUpDown _numSince = null!;
+    private TextBox _txtSince = null!;
     private ComboBox _theme = null!;
     private Label _lblVersion = null!;
 
@@ -91,8 +91,10 @@ internal sealed class SettingsForm : ThemedForm
         card1.Controls.Add(bBrowse);
 
         card1.Controls.Add(Ui.Body("Збирати з року:", Pad, 76, 150));
-        _numSince = new NumericUpDown { Left = Pad + 150, Top = 73, Width = 90, Minimum = 1990, Maximum = 2035, Font = Theme.Body, BackColor = Theme.ControlBg, ForeColor = Theme.TextPrimary, BorderStyle = BorderStyle.FixedSingle };
-        card1.Controls.Add(_numSince);
+        _txtSince = new TextBox { Left = Pad + 150, Top = 73, Width = 90, Height = 24, MaxLength = 4 };
+        Ui.StyleInput(_txtSince);
+        _txtSince.KeyPress += (_, e) => { if (!char.IsControl(e.KeyChar) && !char.IsDigit(e.KeyChar)) e.Handled = true; };
+        card1.Controls.Add(_txtSince);
         card1.Controls.Add(Ui.Caption("Документи, старші за цей рік, не беруться (крім явно обраних).", Pad, 104, CardW - 2 * Pad));
         FinishCard(card1, 130);
         y += card1.Height + 18;
@@ -182,7 +184,7 @@ internal sealed class SettingsForm : ThemedForm
     {
         _theme.SelectedIndex = _cfg.UiTheme == "light" ? 1 : _cfg.UiTheme == "dark" ? 2 : 0;
         _txtOut.Text = _cfg.OutputDir ?? "";
-        _numSince.Value = Math.Clamp(_cfg.SinceYear, 1990, 2035);
+        _txtSince.Text = Math.Clamp(_cfg.SinceYear, 1990, 2035).ToString();
         _cUpdates.Checked = _cfg.CheckUpdatesOnStart;
         _txtKey.Text = Secrets.Get("openrouter.key") ?? "";
         _lblVersion.Text = Program.Version + " · канал: " + (Updater.IsConfigured ? "підключено" : "не налаштовано");
@@ -193,7 +195,7 @@ internal sealed class SettingsForm : ThemedForm
         var before = _cfg.UiTheme;
         _cfg.UiTheme = _theme.SelectedIndex == 1 ? "light" : _theme.SelectedIndex == 2 ? "dark" : "auto";
         _cfg.OutputDir = _txtOut.Text.Trim();
-        _cfg.SinceYear = (int)_numSince.Value;
+        _cfg.SinceYear = int.TryParse(_txtSince.Text.Trim(), out var sinceYear) && sinceYear >= 1990 ? sinceYear : 2022;
         _cfg.CheckUpdatesOnStart = _cUpdates.Checked;
         Secrets.Set("openrouter.key", _txtKey.Text.Trim());
         _cfg.Save();
