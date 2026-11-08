@@ -71,7 +71,7 @@ internal static class Program
         if (args.Length > 0 && (args[0].StartsWith("--") || args[0].StartsWith("/")))
         {
             string[] known = { "--setup", "--install", "--uninstall", "--selftest", "--collect", "--list",
-                               "--relayout", "--probe", "--reindex", "--revert-adapter", "--topics", "--canon", "--help", "-h", "/?", "--set-secret", "--get-secret-check", "--secret-b64", "--update", "--check", "--force", "--about" };
+                               "--relayout", "--probe", "--reindex", "--revert-adapter", "--topics", "--canon", "--help", "-h", "/?", "--set-secret", "--get-secret-check", "--secret-b64", "--update", "--check", "--force", "--about", "--preview" };
             if (!known.Contains(args[0], StringComparer.OrdinalIgnoreCase))
             {
                 AttachConsole(-1);
@@ -129,6 +129,24 @@ internal static class Program
             Console.WriteLine(Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(v)));
             return 0;
         }
+        // Огляд джерела без завантаження — те саме, що кнопка «Оглянути джерело» у вікні.
+        if (args.Any(a => a.Equals("--preview", StringComparison.OrdinalIgnoreCase)))
+        {
+            var i = Array.FindIndex(args, a => a.Equals("--preview", StringComparison.OrdinalIgnoreCase));
+            var id = i >= 0 && i + 1 < args.Length ? args[i + 1] : "";
+            var root = App.Root(null);
+            Directory.CreateDirectory(root);
+            var src = Registry.Load().FirstOrDefault(s => s.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+            if (src == null) { Console.WriteLine("немає джерела: " + id); return 2; }
+            using var cat = new Catalog(root);
+            var h = new Harvester { SinceYear = AppSettings.Load().SinceYear, OnLog = Console.WriteLine };
+            var docs = h.PreviewAsync(src, cat, default).GetAwaiter().GetResult();
+            Console.WriteLine("джерело: " + src.Name + " | документів: " + docs.Count);
+            foreach (var d in docs.Take(12))
+                Console.WriteLine("  " + (string.IsNullOrWhiteSpace(d.Title) ? "(без назви)" : d.Title.Trim()) + " — " + d.Url);
+            return 0;
+        }
+
         if (args.Any(a => a.Equals("--about", StringComparison.OrdinalIgnoreCase)))
         {
             Theme.Init(AppSettings.Load().UiTheme);

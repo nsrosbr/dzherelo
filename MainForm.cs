@@ -29,6 +29,7 @@ internal sealed class MainForm : ThemedForm
     private ListView _docs = null!;
     private CheckBox _onlySel = null!;
     private Label _lblDocsCount = null!, _lblDocsTitle = null!;
+    private Button _btnPreview = null!, _btnFetchPicked = null!;
     private readonly List<(string T, string Src, string Url, string St, long Bytes)> _docRows = new();
     private const int DocRowsMax = 3000;
     private Label _lblSubtitle = null!;
@@ -201,11 +202,22 @@ internal sealed class MainForm : ThemedForm
         host.Controls.Add(_pageTopics);
         _pageDocs = new Panel { Dock = DockStyle.Fill, BackColor = Theme.PageBg, Visible = false };
         var docsCard = new Card { Dock = DockStyle.Fill, Padding = new Padding(14, 10, 14, 12) };
+        _docs.CheckBoxes = true;
+        var docsBar = new Panel { Dock = DockStyle.Top, Height = 42, BackColor = Theme.CardBg };
+        _btnPreview = new Button { Text = "Оглянути джерело", Left = 0, Top = 4, Width = 170 };
+        Ui.StyleSecondary(_btnPreview);
+        _btnPreview.Click += async (_, _) => await PreviewSelectedAsync();
+        _btnFetchPicked = new Button { Text = "Завантажити позначені", Left = 178, Top = 4, Width = 200 };
+        Ui.StylePrimary(_btnFetchPicked);
+        _btnFetchPicked.Click += async (_, _) => await FetchPickedAsync();
+        var lblPick = Ui.Caption("вибери джерело в дереві → «Оглянути» → познач документи", 392, 12, 520);
+        docsBar.Controls.Add(_btnPreview); docsBar.Controls.Add(_btnFetchPicked); docsBar.Controls.Add(lblPick);
         _lblDocsTitle = Ui.Caption("Документи — усе", 0, 0, 600);
         _lblDocsTitle.Dock = DockStyle.Top;
         _lblDocsTitle.Height = 20;
         _docs.Dock = DockStyle.Fill;
         docsCard.Controls.Add(_docs);
+        docsCard.Controls.Add(docsBar);
         docsCard.Controls.Add(_lblDocsTitle);
         _pageDocs.Controls.Add(docsCard);
         host.Controls.Add(_pageDocs);
@@ -388,6 +400,107 @@ internal sealed class MainForm : ThemedForm
         Ui.ThemeListView(_docs);
         SetPage(_pageTopics?.Visible == true ? 1 : 0);
         Invalidate(true);
+    }
+
+    // Огляд: розібрати список джерела й НІЧОГО не качати — щоб можна було позначити конкретні документи.
+    private async Task PreviewSelectedAsync()
+    {
+        if (_running) { Ui.Msg("Спочатку дочекайся кінця поточного збору.", Ui.Name, MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
+        if (_tree.SelectedNode?.Tag is not Source s)
+        {
+            Ui.Msg("Вибери джерело у дереві ліворуч — тоді покажу його документи списком.", Ui.Name, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        var root = _txtOut.Text.Trim();
+        if (root.Length == 0) { Ui.Msg("Вкажи теку, куди збирати.", Ui.Name, MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
+        Directory.CreateDirectory(root);
+
+        _running = true; _btnPreview.Enabled = false; _btnFetchPicked.Enabled = false;
+        _cts = new CancellationTokenSource();
+        _lblDocsTitle.Text = "Огляд — " + s.Name + " … розбираю список";
+        _docs.Items.Clear();
+        try
+        {
+            using var store = new Catalog(root);
+            var h = new Harvester { SinceYear = SinceYearValue(), NewOnly = _chkNew.Checked, OnLog = Log };
+            var docs = await Task.Run(() => h.PreviewAsync(s, store, _cts.Token));
+
+            _docs.BeginUpdate();
+            foreach (var d in docs)
+            {
+                var it = new ListViewItem(DateTime.Now.ToString("HH:mm"));
+                it.SubItems.Add(s.Name);
+                it.SubItems.Add("знайдено");
+                it.SubItems.Add("");
+                it.SubItems.Add(string.IsNullOrWhiteSpace(d.Title) ? d.Url : d.Title);
+                it.Tag = d;
+                it.ToolTipText = d.Url;
+                _docs.Items.Add(it);
+            }
+            _docs.EndUpdate();
+            _lblDocsTitle.Text = "Огляд — " + s.Name + ": " + docs.Count + " документів";
+            _lblDocsCount.Text = docs.Count.ToString("N0") + " документів";
+        }
+        catch (Exception ex)
+        {
+            Ui.Msg("Огляд не вдався: " + ex.Message, Ui.Name, MessageBoxButtons.OK, MessageBoxIcon.Error);
+            _lblDocsTitle.Text = "Документи — " + s.Name;
+        }
+        finally
+        {
+            _running = false; _btnPreview.Enabled = true; _btnFetchPicked.Enabled = true;
+        }
+    }
+
+    // Качаємо рівно позначені документи; стан у рядку оновлюється по факту, без вгадування.
+    private async Task FetchPickedAsync()
+    {
+        if (_running) { Ui.Msg("Збір уже йде.", Ui.Name, MessageBoxButtons.OK, MessageBoxIcon.Information); return; }
+        var src = _tree.SelectedNode?.Tag as Source;
+        var picked = _docs.Items.Cast<ListViewItem>().Where(i => i.Checked && i.Tag is DocRef).ToList();
+        if (src is null || picked.Count == 0)
+        {
+            Ui.Msg("Немає що качати: вибери джерело, натисни «Оглянути джерело» і постав галочки навпроти документів.",
+                Ui.Name, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        var root = _txtOut.Text.Trim();
+        var byUrl = picked.ToDictionary(i => ((DocRef)i.Tag!).Url, i => i, StringComparer.OrdinalIgnoreCase);
+        var docs = picked.Select(i => (DocRef)i.Tag!).ToList();
+
+        _running = true; _btnPreview.Enabled = false; _btnFetchPicked.Enabled = false;
+        _cts = new CancellationTokenSource();
+        try
+        {
+            using var store = new Catalog(root);
+            var h = new Harvester
+            {
+                SinceYear = SinceYearValue(),
+                NewOnly = _chkNew.Checked,
+                OnLog = Log,
+                OnDoc = (name, url, state, bytes) => RunOnUi(() =>
+                {
+                    if (byUrl.TryGetValue(url, out var it))
+                    {
+                        it.SubItems[2].Text = state;
+                        it.SubItems[3].Text = bytes > 0 ? (bytes / 1024 / 1024.0).ToString("0.0") + " МБ" : "";
+                    }
+                    AddDoc(name, url, state, bytes);
+                }),
+            };
+            var (saved, failed) = await Task.Run(() => h.FetchDocsAsync(src, docs, store, _cts.Token));
+            _lblDocsTitle.Text = "Огляд — " + src.Name + ": завантажено " + saved + ", помилок " + failed;
+            _lblState.Text = CountCollection();
+        }
+        catch (Exception ex)
+        {
+            Ui.Msg("Не вдалося: " + ex.Message, Ui.Name, MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        finally
+        {
+            _running = false; _btnPreview.Enabled = true; _btnFetchPicked.Enabled = true;
+        }
     }
 
     private void OpenSettings()

@@ -471,6 +471,40 @@ public sealed class Harvester
         OnDoc?.Invoke(s.Name, targetUrl, "завантажено", saved.Size);
     }
 
+
+    // ---- вибірковий режим: спершу оглянути список, потім качати лише позначене ----
+
+    /// <summary>Розібрати список джерела й НІЧОГО не качати (для екрана «Документи»).</summary>
+    public async Task<List<DocRef>> PreviewAsync(Source s, Catalog store, CancellationToken ct)
+    {
+        var stats = new DiscoveryStats();
+        using var fetch = new Fetcher(Path.Combine(store.Root, "state")) { MinIntervalMs = 1000 };
+        var list = new List<DocRef>();
+        await foreach (var d in Adapters.DiscoverAsync(s, fetch, SinceYear, stats, _cursors, ct))
+        {
+            if (list.Any(x => Catalog.Canonical(x.Url) == Catalog.Canonical(d.Url))) continue;
+            list.Add(d);
+            if (list.Count >= MaxDocsPerSource) { stats.Capped = true; break; }
+        }
+        Log("  огляд: " + list.Count + " документів, нічого не завантажено");
+        return list;
+    }
+
+    /// <summary>Завантажити рівно ці документи джерела (вибране користувачем).</summary>
+    public async Task<(int saved, int failed)> FetchDocsAsync(Source s, IReadOnlyList<DocRef> docs, Catalog store, CancellationToken ct)
+    {
+        using var fetch = new Fetcher(Path.Combine(store.Root, "state")) { MinIntervalMs = 1000 };
+        var r = new SourceResult { Id = s.Id, Name = s.Name, Section = s.Section };
+        foreach (var d in docs)
+        {
+            ct.ThrowIfCancellationRequested();
+            await HandleAsync(s, d, store, fetch, r, ct);
+        }
+        var saved = r.New + r.Html;
+        Log("  вибране: збережено " + saved + ", помилок " + r.Failed);
+        return (saved, r.Failed);
+    }
+
     // Full URLs go to the log file: a truncated one cannot be re-checked or fixed later.
 
 
