@@ -454,11 +454,19 @@ namespace Dzherelo
     public static void FillLastColumn(ListView lv, int min = 160)
     {
         if (lv.Columns.Count == 0) return;
-        int used = 0;
-        for (int i = 0; i < lv.Columns.Count - 1; i++) used += lv.Columns[i].Width;
-        // мінус вертикальна смуга: інакше з'являється горизонтальна прокрутка
-        int rest = lv.ClientSize.Width - used - SystemInformation.VerticalScrollBarWidth - 4;
-        lv.Columns[^1].Width = Math.Max(min, rest);
+
+        void Fit()
+        {
+            int used = 0;
+            for (int i = 0; i < lv.Columns.Count - 1; i++) used += lv.Columns[i].Width;
+            int rest = lv.ClientSize.Width - used - 2;
+            if (rest < min) rest = min;
+            if (lv.Columns[^1].Width != rest) lv.Columns[^1].Width = rest;
+        }
+
+        Fit();
+        // після зміни ширини може з'явитися/зникнути вертикальна смуга — доводимо вдруге
+        if (lv.IsHandleCreated) lv.BeginInvoke(Fit);
     }
 
     // Системний ListView у темній темі лишає СВІТЛІ/СИНІ заголовки: малюємо самі.
