@@ -7,10 +7,63 @@ public static class Selftest
 {
     private static int _failed;
 
+    /// <summary>Головне вікно будується, тема перемикається dark→light, кожен контрол мусить
+    /// взяти колір поточної палітри (жодних залишків попередньої).</summary>
+    private static bool UiThemeConsistent()
+    {
+        bool ok = true;
+        var th = new System.Threading.Thread(() =>
+        {
+            try
+            {
+                using var form = new MainForm();
+                _ = form.Handle;                       // створюємо нативні ручки
+                foreach (var mode in new[] { "dark", "light" })
+                {
+                    Theme.Init(mode);
+                    Theme.Refresh();
+                    form.Refresh();
+
+                    var page = Theme.PageBg; var card = Theme.CardBg; var input = Theme.ControlBg;
+                    foreach (var c in Walk(form))
+                    {
+                        switch (c)
+                        {
+                            case Form f:
+                                if (f.BackColor != page) { ok = false; return; } break;
+                            case TreeView tv:
+                                if (tv.BackColor != input) { ok = false; return; } break;
+                            case ListView lv:
+                                if (lv.BackColor != input) { ok = false; return; } break;
+                            case TextBox tb:
+                                if (tb.BackColor != input) { ok = false; return; } break;
+                            case NumericUpDown nu:
+                                if (nu.BackColor != input) { ok = false; return; } break;
+                            case Card cd:
+                                if (cd.BackColor != card) { ok = false; return; } break;
+                        }
+                    }
+                }
+            }
+            catch { ok = false; }
+        });
+        th.SetApartmentState(System.Threading.ApartmentState.STA);
+        th.Start();
+        th.Join(30000);
+        return ok;
+    }
+
+    private static IEnumerable<Control> Walk(Control root)
+    {
+        foreach (Control c in root.Controls) { yield return c; foreach (var d in Walk(c)) yield return d; }
+    }
+
     public static int Run()
     {
         try { Console.OutputEncoding = Encoding.UTF8; } catch { }
         var report = new StringBuilder();
+        Check("UI: перемикання теми дає один набір кольорів", UiThemeConsistent());
+
         void Log(string s) { try { Console.WriteLine(s); } catch { } report.AppendLine(s); }
         void Check(string name, bool ok, string detail = "")
         {

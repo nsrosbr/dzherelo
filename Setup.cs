@@ -210,13 +210,14 @@ public static class Setup
         {
             try
             {
-                System.Windows.Forms.MessageBox.Show(
-                    "Dzherelo 2.0.0 встановлено.\n\nТека: " + targetDir +
+                // Власний діалог, а не системний MessageBox: рамка й заголовок ідуть за темою.
+                Theme.Init(AppSettings.Load().UiTheme);
+                var answer = Ui.Msg(
+                    "Dzherelo " + Program.Version + " встановлено.\n\nТека: " + targetDir +
                     "\nЯрлики: меню «Пуск» і робочий стіл.\n\nВідкрити застосунок?",
                     "Dzherelo — встановлення завершено",
-                    System.Windows.Forms.MessageBoxButtons.YesNo,
-                    System.Windows.Forms.MessageBoxIcon.Information);
-                System.Diagnostics.Process.Start(targetExe);
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Information);
+                if (answer == DialogResult.Yes) System.Diagnostics.Process.Start(targetExe);
             }
             catch { /* якщо GUI недоступний — вже є консольний вивід */ }
         }

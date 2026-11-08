@@ -317,6 +317,12 @@ namespace Dzherelo
         {
             base.OnHandleCreated(e);
             Ui.SetDarkTitleBar(Handle, Theme.IsDark);
+            // Одна точка перемикання: заголовок + усі контроли цього вікна.
+            Theme.Changed += () =>
+            {
+                Ui.SetDarkTitleBar(Handle, Theme.IsDark);
+                Ui.Apply(this);
+            };
         }
     }
 
@@ -341,7 +347,7 @@ namespace Dzherelo
 
         public static Label Caption(string text, int x, int y, int w)
         {
-            return new Label { Text = text, Left = x, Top = y, Width = w, Font = Theme.Caption, ForeColor = Theme.TextSecondary, BackColor = Color.Transparent, AutoSize = false, Height = 16 };
+            return new Label { Text = text, Left = x, Top = y, Width = w, Font = Theme.Caption, ForeColor = Theme.TextSecondary, BackColor = Color.Transparent, AutoSize = false, Height = 16, Tag = "muted" };
         }
 
         public static void StylePrimary(Button b)
@@ -446,6 +452,8 @@ namespace Dzherelo
         // Системний ListView у темній темі лишає СВІТЛІ/СИНІ заголовки: малюємо самі.
     public static void ThemeListView(ListView lv)
     {
+        if ((lv.Tag as string) == "themed-list") { lv.Invalidate(); return; }
+        lv.Tag = "themed-list";
         lv.OwnerDraw = true;
         lv.BackColor = Theme.ControlBg;
         lv.ForeColor = Theme.TextPrimary;
@@ -473,6 +481,76 @@ namespace Dzherelo
         Theme.Changed += lv.Invalidate;
     }
 
+
+    // ЄДИНИЙ застосовувач теми: обходить дерево контролів і приводить кожен тип до палітри.
+    public static void Apply(Control root)
+    {
+        ApplyOne(root);
+        foreach (Control child in root.Controls) Apply(child);
+        root.Invalidate(true);
+    }
+
+    private static void ApplyOne(Control c)
+    {
+        switch (c)
+        {
+            case Card card: card.BackColor = Theme.CardBg; break;
+            case SplitContainer sc:
+                sc.BackColor = Theme.PageBg;
+                ApplyOne(sc.Panel1); ApplyOne(sc.Panel2);
+                break;
+            case SplitterPanel sp: sp.BackColor = Theme.PageBg; break;
+            case Form f:
+                f.BackColor = Theme.PageBg; f.ForeColor = Theme.TextPrimary;
+                break;
+            case Label lbl:
+                lbl.ForeColor = (lbl.Tag as string) == "muted" ? Theme.TextSecondary : Theme.TextPrimary;
+                lbl.BackColor = Color.Transparent;
+                break;
+            case Button b:
+                if ((b.Tag as string) == "primary") StylePrimary(b);
+                else if ((b.Tag as string) == "nav") StyleSecondary(b);
+                break;
+            case TextBox tb:
+                tb.BackColor = Theme.ControlBg; tb.ForeColor = Theme.TextPrimary;
+                ApplyScrollTheme(tb);
+                break;
+            case NumericUpDown nu:
+                nu.BackColor = Theme.ControlBg; nu.ForeColor = Theme.TextPrimary;
+                break;
+            case ComboBox cb:
+                cb.BackColor = Theme.ControlBg; cb.ForeColor = Theme.TextPrimary;
+                break;
+            case CheckBox chk:
+                chk.ForeColor = Theme.TextPrimary; chk.BackColor = Color.Transparent;
+                break;
+            case TreeView tv:
+                tv.BackColor = Theme.ControlBg; tv.ForeColor = Theme.TextPrimary;
+                ApplyScrollTheme(tv);
+                break;
+            case ListView lv:
+                lv.BackColor = Theme.ControlBg; lv.ForeColor = Theme.TextPrimary;
+                ApplyScrollTheme(lv);
+                break;
+            case ProgressBar pb: SetProgressColors(pb); break;
+            case Panel or FlowLayoutPanel:
+                if (c is not SplitterPanel && (c.Tag as string) != "cardbg") c.BackColor = Theme.PageBg;
+                break;
+        }
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+
+    // Системний ProgressBar малює себе сам: кольори задаються повідомленнями.
+    public static void SetProgressColors(ProgressBar pb)
+    {
+        if (!pb.IsHandleCreated) { pb.HandleCreated += (_, _) => SetProgressColors(pb); return; }
+        const int PBM_SETBARCOLOR = 0x0409, PBM_SETBKCOLOR = 0x2001;
+        SendMessage(pb.Handle, PBM_SETBARCOLOR, IntPtr.Zero, (IntPtr)ColorTranslator.ToWin32(Theme.Accent));
+        SendMessage(pb.Handle, PBM_SETBKCOLOR, IntPtr.Zero, (IntPtr)ColorTranslator.ToWin32(Theme.ControlBg));
+    }
+
     public static void OpenUrl(string url)
         {
             try { System.Diagnostics.Process.Start(url); }
@@ -497,6 +575,12 @@ namespace Dzherelo
                 // 20 = DWMWA_USE_IMMERSIVE_DARK_MODE (Win10 20H1+/Win11); 19 = pre-20H1 fallback.
                 if (DwmSetWindowAttribute(hwnd, 20, ref v, 4) != 0)
                     DwmSetWindowAttribute(hwnd, 19, ref v, 4);
+
+                // 34 = DWMWA_BORDER_COLOR: рамка вікна теж має йти за темою,
+                // інакше навколо темного вікна лишається світла смуга (і навпаки).
+                // COLORREF = 0x00BBGGRR; 0xFFFFFFFF = «системний колір».
+                int border = dark ? unchecked((int)0x00202020) : unchecked((int)0xFFFFFFFF);
+                DwmSetWindowAttribute(hwnd, 34, ref border, 4);
             }
             catch { }
         }

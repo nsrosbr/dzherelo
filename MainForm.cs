@@ -3,7 +3,7 @@ using Microsoft.Web.WebView2.WinForms;
 
 namespace Dzherelo;
 
-public sealed class MainForm : Form
+internal sealed class MainForm : ThemedForm
 {
     private readonly AppSettings _settings = AppSettings.Load();
     private List<Source> _sources = new();
@@ -231,7 +231,7 @@ public sealed class MainForm : Form
 
     private Button NavBtn(string text) => new()
     {
-        Text = text, AutoSize = true, Height = 34, Margin = new Padding(0, 1, 8, 0),
+        Tag = "nav", Text = text, AutoSize = true, Height = 34, Margin = new Padding(0, 1, 8, 0),
         Font = Theme.ButtonFont, Padding = new Padding(12, 0, 12, 0), FlatStyle = FlatStyle.Flat,
     };
 
@@ -258,53 +258,20 @@ public sealed class MainForm : Form
         b.Font = active ? Theme.Section : Theme.Body;
     }
 
-    // Тема як у Valera: рівні поверхні PageBg → CardBg → ControlBg, акцент лише на головній дії.
+    // Тема як у Valera: одна палітра для всього вікна, перемикається без перезапуску.
     private void ApplyTheme()
     {
-        BackColor = Theme.PageBg;
-        ForeColor = Theme.TextPrimary;
-
-        Ui.StylePrimary(_btnRun);
+        _btnRun.Tag = "primary";
         foreach (var b in new[] { _btnStop, _btnBrowse, _btnOpen, _btnReport, _btnBrowser, _btnLog, _btnSettings })
-            Ui.StyleSecondary(b);
+            b.Tag = "nav";
+        _lblSubtitle.Tag = "muted";
+        _lblState.Tag = "muted";
 
-        foreach (var c in new Control[] { _tree, _list, _topics, _txtLog, _txtOut, _numSince })
-        {
-            c.BackColor = Theme.ControlBg;
-            c.ForeColor = Theme.TextPrimary;
-            Ui.ApplyScrollTheme(c);
-        }
-        _txtLog.BackColor = Theme.CardBg;
-        _lblState.ForeColor = Theme.TextSecondary;
-        _lblSubtitle.ForeColor = Theme.TextSecondary;
-        _chkNew.ForeColor = Theme.TextPrimary;
-
+        Ui.Apply(this);            // усі контроли, включно з тими, що малюють себе самі
         Ui.ThemeListView(_list);
         Ui.ThemeListView(_topics);
-        foreach (Control c in Controls) PaintSurface(c);
         SetPage(_pageTopics?.Visible == true ? 1 : 0);
         Invalidate(true);
-    }
-
-    // Фарбуємо лише поверхні: панелі, картки, розділювачі. Текст не чіпаємо — інакше сірий на сірому.
-    private static void PaintSurface(Control c)
-    {
-        switch (c)
-        {
-            case Card card:
-                card.BackColor = Theme.CardBg;
-                card.Invalidate();
-                break;
-            case SplitContainer sc:
-                sc.BackColor = Theme.PageBg;
-                sc.SplitterWidth = 8;
-                PaintSurface(sc.Panel1); PaintSurface(sc.Panel2);
-                break;
-            case Panel or FlowLayoutPanel:
-                if (c is not SplitterPanel) c.BackColor = Theme.PageBg;
-                break;
-        }
-        foreach (Control child in c.Controls) PaintSurface(child);
     }
 
     private void OpenSettings()
