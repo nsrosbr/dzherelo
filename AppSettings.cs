@@ -8,6 +8,10 @@ public sealed class AppSettings
     public string? OutputDir { get; set; }
     public int SinceYear { get; set; } = 2022;
 
+    // "auto" (як у Windows) | "light" | "dark" — та сама логіка, що в Valera.
+    public string UiTheme { get; set; } = "auto";
+    public bool CheckUpdatesOnStart { get; set; } = true;
+
     // Ключ OpenRouter і логіни проксі живуть у DPAPI (Secrets), а не в settings.json (§18, SPEC v0.1 §44).
     // [JsonIgnore] + читання/запис через Secrets — ключ ніколи не потрапляє у серіалізовані налаштування.
     [JsonIgnore]

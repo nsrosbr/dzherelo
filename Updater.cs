@@ -16,6 +16,9 @@ public static class Updater
 
     private static string? Token() => Secrets.Get("github.token");
 
+    /// <summary>Чи налаштований канал: приватний репозиторій без токена недоступний.</summary>
+    public static bool IsConfigured => !string.IsNullOrWhiteSpace(Token());
+
     private static HttpRequestMessage Req(string url)
     {
         var m = new HttpRequestMessage(HttpMethod.Get, url);

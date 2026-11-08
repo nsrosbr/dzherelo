@@ -14,7 +14,7 @@ public sealed class MainForm : Form
     private CancellationTokenSource? _cts;
     private bool _running;
 
-    private Button _btnRun = null!, _btnStop = null!, _btnBrowse = null!, _btnOpen = null!, _btnReport = null!, _btnBrowser = null!, _btnLog = null!;
+    private Button _btnRun = null!, _btnStop = null!, _btnBrowse = null!, _btnOpen = null!, _btnReport = null!, _btnBrowser = null!, _btnLog = null!, _btnSettings = null!;
     private CheckBox _chkNew = null!;
     private NumericUpDown _numSince = null!;
     private TextBox _txtOut = null!, _txtLog = null!;
@@ -24,15 +24,19 @@ public sealed class MainForm : Form
     private SplitContainer _body = null!, _right = null!;
     private Label _lblState = null!;
     private ListView _topics = null!;
+    private TabControl _tabs = null!;
     private readonly TaskbarProgress _taskbar = new();
 
     public MainForm()
     {
-        Text = "Dzherelo 2 — збір джерел";
+        Text = "Dzherelo";                     // назва без хвостів, як домовлено
+        Icon = Program.AppIcon();             // та сама іконка, що в exe
         StartPosition = FormStartPosition.CenterScreen;
         ClientSize = new Size(1240, 800);
         MinimumSize = new Size(980, 640);
         BuildUi();
+        ApplyTheme();
+        Theme.Changed += ApplyTheme;
         LoadSources();
         Load += (_, _) =>
         {
@@ -63,11 +67,12 @@ public sealed class MainForm : Form
         _btnReport = Btn("Звіт");
         _btnLog = Btn("Зберегти лог");
         _btnOpen = Btn("Тека");
+        _btnSettings = Btn("Параметри…");
         row1.Controls.AddRange(new Control[]
         {
             _btnRun, _btnStop, _chkNew,
             new Label { Text = "з року:", AutoSize = true, Margin = new Padding(16, 9, 0, 0) }, _numSince,
-            _btnBrowser, _btnReport, _btnLog, _btnOpen,
+            _btnBrowser, _btnReport, _btnLog, _btnOpen, _btnSettings,
         });
 
         var row2 = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(8, 2, 8, 6), WrapContents = false };
@@ -125,11 +130,13 @@ public sealed class MainForm : Form
         tabSources.Controls.Add(_body);
         var tabTopics = new TabPage("Теми") { Padding = new Padding(6) };
         tabTopics.Controls.Add(_topics);
-        var tabs = new TabControl { Dock = DockStyle.Fill };
-        tabs.TabPages.Add(tabSources);
-        tabs.TabPages.Add(tabTopics);
+        _tabs = new TabControl { Dock = DockStyle.Fill, DrawMode = TabDrawMode.OwnerDrawFixed, SizeMode = TabSizeMode.Fixed };
+        _tabs.ItemSize = new Size(120, 30);
+        _tabs.DrawItem += DrawTab;
+        _tabs.TabPages.Add(tabSources);
+        _tabs.TabPages.Add(tabTopics);
 
-        Controls.Add(tabs);
+        Controls.Add(_tabs);
         Controls.Add(bottom);
         Controls.Add(row2);
         Controls.Add(row1);
@@ -145,9 +152,93 @@ public sealed class MainForm : Form
             else Log("Звіту ще немає.");
         };
         _btnBrowser.Click += (_, _) => OpenBrowser();
+        _btnSettings.Click += (_, _) => OpenSettings();
         _btnLog.Click += (_, _) => SaveLog(openAfter: true);
         _tree.AfterCheck += TreeAfterCheck;
         _txtOut.Leave += (_, _) => { _settings.OutputDir = _txtOut.Text.Trim(); _settings.Save(); };
+    }
+
+    // Тема як у Valera: рівні поверхні PageBg → CardBg → ControlBg, акцент лише на головній дії.
+    private void ApplyTheme()
+    {
+        BackColor = Theme.PageBg;
+        ForeColor = Theme.TextPrimary;
+        Font = Theme.Body;
+
+        Ui.StylePrimary(_btnRun);
+        foreach (var b in new[] { _btnStop, _btnBrowse, _btnOpen, _btnReport, _btnBrowser, _btnLog, _btnSettings })
+            Ui.StyleSecondary(b);
+
+        foreach (var c in new Control[] { _tree, _list, _topics, _txtLog, _txtOut, _numSince })
+        {
+            c.BackColor = Theme.ControlBg;
+            c.ForeColor = Theme.TextPrimary;
+            c.Font = c == _txtLog ? new Font("Consolas", 9f) : Theme.Body;
+            Ui.ApplyScrollTheme(c);
+        }
+        _tree.BorderStyle = BorderStyle.None;
+        _list.BorderStyle = BorderStyle.None;
+        _topics.BorderStyle = BorderStyle.None;
+        _list.GridLines = false;
+        _topics.GridLines = false;
+        _txtLog.WordWrap = false;
+        _lblState.ForeColor = Theme.TextSecondary;
+        _chkNew.ForeColor = Theme.TextPrimary;
+
+        foreach (Control c in Controls) PaintSurface(c);
+
+        _tabs?.Invalidate();
+        Invalidate(true);
+    }
+
+    // Фарбуємо лише «поверхні» (панелі/вкладки), а не кожен Label — інакше текст стає сірим на сірому.
+    private static void PaintSurface(Control c)
+    {
+        switch (c)
+        {
+            case TabControl tabs:
+                tabs.BackColor = Theme.PageBg;
+                foreach (TabPage tp in tabs.TabPages) { tp.BackColor = Theme.PageBg; tp.ForeColor = Theme.TextPrimary; }
+                break;
+            case TabPage tp:
+                tp.BackColor = Theme.PageBg; tp.ForeColor = Theme.TextPrimary;
+                break;
+            case SplitContainer sc:
+                sc.BackColor = Theme.Divider;
+                sc.SplitterWidth = 1;
+                PaintSurface(sc.Panel1); PaintSurface(sc.Panel2);
+                break;
+            case Panel or FlowLayoutPanel:
+                if (c is SplitterPanel == false) c.BackColor = Theme.PageBg;
+                break;
+        }
+        foreach (Control child in c.Controls) PaintSurface(child);
+    }
+
+    private void DrawTab(object? sender, DrawItemEventArgs e)
+    {
+        var g = e.Graphics;
+        bool sel = e.Index == _tabs.SelectedIndex;
+        var r = e.Bounds;
+        using (var b = new SolidBrush(Theme.PageBg)) g.FillRectangle(b, r);
+        if (sel) using (var b = new SolidBrush(Theme.Accent)) g.FillRectangle(b, r.X + 6, r.Bottom - 3, r.Width - 12, 3);
+        TextRenderer.DrawText(g, _tabs.TabPages[e.Index].Text, sel ? Theme.Section : Theme.Body, r,
+            sel ? Theme.TextPrimary : Theme.TextSecondary,
+            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+    }
+
+    private void OpenSettings()
+    {
+        var fresh = AppSettings.Load();
+        using var dlg = new SettingsForm(fresh);
+        if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+        // Параметри збережено всередині діалогу — підхоплюємо те, що впливає на головне вікно.
+        var cur = AppSettings.Load();
+        _txtOut.Text = cur.OutputDir ?? "";
+        _numSince.Value = Math.Clamp(cur.SinceYear, 1990, 2030);
+        ApplyTheme();
+        Log("Параметри збережено.");
     }
 
     private void LayoutSplitters()
@@ -274,14 +365,14 @@ public sealed class MainForm : Form
             SinceYear = (int)_numSince.Value,
             NewOnly = _chkNew.Checked,
             OnLog = Log,
-            OnProgress = (done, total) => Ui(() =>
+            OnProgress = (done, total) => RunOnUi(() =>
             {
                 _prog.Maximum = Math.Max(1, total);
                 _prog.Value = Math.Min(done, _prog.Maximum);
                 _taskbar.SetValue(done, total);
                 _lblState.Text = $"{done} / {total}";
             }),
-            OnSourceDone = r => Ui(() => AddResult(r)),
+            OnSourceDone = r => RunOnUi(() => AddResult(r)),
         };
         _cts = new CancellationTokenSource();
         _lastRunId = harvester.RunId;
@@ -491,7 +582,7 @@ public sealed class MainForm : Form
         _txtLog.AppendText(line + Environment.NewLine);
     }
 
-    private void Ui(Action a)
+    private void RunOnUi(Action a)
     {
         if (IsDisposed) return;
         if (InvokeRequired) { try { BeginInvoke(a); } catch { } }

@@ -15,6 +15,16 @@ public static class App
 
 internal static class Program
 {
+    /// <summary>Версія зі збірки (2.0.0).</summary>
+    public static string Version => Updater.Current.ToString(3);
+
+    /// <summary>Іконка застосунку — та сама, що вшита в exe.</summary>
+    public static Icon? AppIcon()
+    {
+        try { return Icon.ExtractAssociatedIcon(Environment.ProcessPath!); }
+        catch { return null; }
+    }
+
     private const string Usage = """
         Dzherelo — збирач відкритих документів
 
@@ -158,6 +168,7 @@ internal static class Program
             return 1;
         }
 
+        Theme.Init(AppSettings.Load().UiTheme);   // тема з параметрів, як у Valera
         ApplicationConfiguration.Initialize();
         Application.Run(new MainForm());
         return 0;
