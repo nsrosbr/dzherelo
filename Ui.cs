@@ -492,11 +492,28 @@ namespace Dzherelo
         {
             bool sel = (e.ItemState & ListViewItemStates.Selected) != 0;
             using (var b = new SolidBrush(sel ? Theme.GridSelBg : Theme.ControlBg)) e.Graphics.FillRectangle(b, e.Bounds);
+
+            var r = Rectangle.Inflate(e.Bounds, -6, 0);
+            // OwnerDraw сам галочки НЕ малює — без цього документ неможливо позначити.
+            if (lv.CheckBoxes && e.ColumnIndex == 0)
+            {
+                var box = new Rectangle(e.Bounds.Left + 4, e.Bounds.Top + (e.Bounds.Height - 13) / 2, 13, 13);
+                ControlPaint.DrawCheckBox(e.Graphics, box, e.Item.Checked ? ButtonState.Checked : ButtonState.Normal);
+                r = new Rectangle(box.Right + 6, e.Bounds.Top, Math.Max(10, e.Bounds.Right - box.Right - 10), e.Bounds.Height);
+            }
+
             var flags = TextFormatFlags.VerticalCenter |
                         (e.Header?.TextAlign == HorizontalAlignment.Right ? TextFormatFlags.Right : TextFormatFlags.Left);
-            var r = Rectangle.Inflate(e.Bounds, -6, 0);
             TextRenderer.DrawText(e.Graphics, e.SubItem?.Text ?? "", Theme.Body, r,
                 sel ? Theme.TextPrimary : Theme.TextPrimary, flags);
+        };
+
+        // клік по рядку теж перемикає галочку — цілитись у квадратик 13px незручно
+        lv.MouseClick += (_, e) =>
+        {
+            if (!lv.CheckBoxes) return;
+            var hit = lv.HitTest(e.Location);
+            if (hit.Item != null) hit.Item.Checked = !hit.Item.Checked;
         };
         Theme.Changed += lv.Invalidate;
     }
