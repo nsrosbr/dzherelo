@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="uk"><head><meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:transparent}
+.wrap{width:960px;color:var(--foreground);font-size:13px;line-height:1.4}
+.top{display:flex;align-items:center;gap:14px;padding:9px 14px;border:1px solid var(--border);border-bottom:none;border-radius:8px 8px 0 0}
+.brand{font-weight:600;font-size:14px;letter-spacing:.2px}
+.muted{color:var(--muted-foreground)}
+.spacer{flex:1}
+.btn{padding:5px 11px;border-radius:6px;border:1px solid var(--border);background:transparent;color:inherit;font:inherit;cursor:pointer;white-space:nowrap}
+.btn.p{background:var(--accent);border-color:var(--accent);color:var(--card);font-weight:600}
+.grid{display:flex;border:1px solid var(--border);border-radius:0 0 8px 8px;overflow:hidden;min-height:430px}
+/* ---- left: themes ---- */
+.side{width:290px;border-right:1px solid var(--border);display:flex;flex-direction:column}
+.side h4{margin:0;padding:9px 12px 7px;font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted-foreground);font-weight:600}
+.tlist{overflow:auto}
+.t{padding:7px 12px 8px 11px;border-left:2px solid transparent;cursor:pointer}
+.t:hover{background:color-mix(in srgb,var(--foreground) 4%,transparent)}
+.t.sel{border-left-color:var(--accent);background:color-mix(in srgb,var(--foreground) 6%,transparent)}
+.t .nm{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.t .nm b{font-weight:500}
+.t .ct{font-variant-numeric:tabular-nums;font-size:12px;color:var(--muted-foreground)}
+.t .ft{font-size:11.5px;color:var(--muted-foreground);display:flex;gap:8px;margin-top:1px}
+.dot{display:inline-block;width:6px;height:6px;border-radius:50%;border:1px solid var(--accent);vertical-align:middle;margin-right:4px}
+.dot.f{background:var(--accent)}
+.side .foot{margin-top:auto;border-top:1px solid var(--border);padding:8px 12px}
+/* ---- center ---- */
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.mhead{padding:9px 13px;border-bottom:1px solid var(--border);display:flex;align-items:baseline;gap:10px}
+.mhead b{font-size:14px;font-weight:600}
+.chip{font-size:11px;padding:1px 7px;border:1px solid var(--border);border-radius:99px;color:var(--muted-foreground)}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted-foreground);font-weight:600;padding:7px 13px;border-bottom:1px solid var(--border)}
+td{padding:6px 13px;border-bottom:1px solid color-mix(in srgb,var(--border) 45%,transparent);vertical-align:top}
+td.n{white-space:nowrap}
+td.tl{font-family:inherit}
+.b{font-size:11px;padding:0 6px;border-radius:4px;border:1px solid var(--border);color:var(--muted-foreground);white-space:nowrap}
+.b.ok{border-color:var(--accent);color:var(--accent)}
+.b.new{background:var(--accent);border-color:var(--accent);color:var(--card);font-weight:600}
+.b.miss{opacity:.55}
+/* ---- right ---- */
+.right{width:236px;border-left:1px solid var(--border);padding:10px 12px;display:flex;flex-direction:column;gap:9px}
+.right h5{margin:0;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted-foreground);font-weight:600}
+.kv{display:flex;justify-content:space-between;font-size:12px;padding:2px 0}
+.kv span:last-child{font-variant-numeric:tabular-nums}
+.bar{height:5px;border-radius:99px;background:color-mix(in srgb,var(--foreground) 12%,transparent);overflow:hidden;margin:2px 0 6px}
+.bar i{display:block;height:100%;background:var(--accent)}
+.gap{border:1px dashed var(--border);border-radius:6px;padding:7px 8px;font-size:11.5px;line-height:1.35;color:var(--muted-foreground)}
+.gap b{color:var(--foreground);font-weight:500}
+.status{display:flex;gap:12px;padding:6px 14px;border:1px solid var(--border);border-top:none;border-radius:0 0 8px 8px;font-size:11.5px;color:var(--muted-foreground)}
+</style></head>
+<body><div class="wrap">
+
+<div class="top">
+  <span class="brand">Dzherelo</span>
+  <span class="muted">87 бібліотек · 2 341 документ · 18,4 ГБ</span>
+  <span class="spacer"></span>
+  <button class="btn">Сканувати бібліотеки</button>
+  <button class="btn p">Зібрати за темою</button>
+</div>
+
+<div class="grid">
+  <div class="side">
+    <h4>Теми · покриття</h4>
+    <div class="tlist">
+      <div class="t sel"><div class="nm"><b>Інженерні переправи</b><span class="ct">14</span></div>
+        <div class="ft"><span>2025</span><span>норми: 0</span></div></div>
+      <div class="t"><div class="nm"><b>Інженерна розвідка</b><span class="ct">23</span></div>
+        <div class="ft"><span>2025</span><span>ок</span></div></div>
+      <div class="t"><div class="nm"><b>Мінна безпека</b><span class="ct">31</span></div>
+        <div class="ft"><span>2025</span><span>ок</span></div></div>
+      <div class="t"><div class="nm"><b>Фортифікація, загородження</b><span class="ct">9</span></div>
+        <div class="ft"><span>2023</span><span><i class="dot"></i>прогалина</span></div></div>
+      <div class="t"><div class="nm"><b>Гідрологія, водопропуск</b><span class="ct">6</span></div>
+        <div class="ft"><span>2021</span><span><i class="dot f"></i>застаріло</span></div></div>
+      <div class="t"><div class="nm"><b>Будівельні конструкції</b><span class="ct">4</span></div>
+        <div class="ft"><span>2019</span><span><i class="dot f"></i>застаріло</span></div></div>
+      <div class="t"><div class="nm"><b>Тактика малих груп</b><span class="ct">12</span></div>
+        <div class="ft"><span>2025</span><span>ок</span></div></div>
+    </div>
+    <div class="foot"><span class="muted">+ нова тема</span></div>
+  </div>
+
+  <div class="main">
+    <div class="mhead"><b>Інженерні переправи</b>
+      <span class="chip">14 док.</span><span class="chip">найсвіжіший 2025</span>
+      <span class="chip">прогалина: нормативні</span></div>
+    <table>
+      <thead><tr><th>Документ</th><th>Бібліотека</th><th>Тип</th><th>Рік</th><th></th></tr></thead>
+      <tbody>
+        <tr><td class="tl">FM 3-34 Engineer Operations</td><td class="n muted">army-pubs</td><td class="n muted">doctrine</td><td class="n">2025</td><td class="n"><span class="b new">нова ред.</span></td></tr>
+        <tr><td class="tl">ATP 3-34.91 Gap Crossing</td><td class="n muted">army-pubs</td><td class="n muted">doctrine</td><td class="n">2023</td><td class="n"><span class="b ok">у мене</span></td></tr>
+        <tr><td class="tl">Application of Tactical Bridging — Ex BROLGA RUN</td><td class="n muted">the-cove</td><td class="n muted">lessons</td><td class="n">2024</td><td class="n"><span class="b ok">у мене</span></td></tr>
+        <tr><td class="tl">EM 5-1-11 Project Delivery Business Process</td><td class="n muted">usace</td><td class="n muted">manual</td><td class="n">2024</td><td class="n"><span class="b ok">у мене</span></td></tr>
+        <tr><td class="tl">Military Bridging in Contested Waters</td><td class="n muted">rusi</td><td class="n muted">report</td><td class="n">2022</td><td class="n"><span class="b ok">у мене</span></td></tr>
+        <tr><td class="tl">ДБН В.2.3-4:2015 Споруди транспорту. Автомобільні дороги</td><td class="n muted">edessb</td><td class="n muted">manual</td><td class="n">2015</td><td class="n"><span class="b miss">немає</span></td></tr>
+        <tr><td class="tl">Пособие по переправам через водные преграды</td><td class="n muted">bntu</td><td class="n muted">book</td><td class="n">1988</td><td class="n"><span class="b ok">у мене</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="right">
+    <h5>Покриття теми</h5>
+    <div class="kv"><span>doctrine</span><span>5</span></div>
+    <div class="kv"><span>lessons</span><span>4</span></div>
+    <div class="kv"><span>report</span><span>3</span></div>
+    <div class="kv"><span>manual / норми</span><span>0</span></div>
+    <div class="bar"><i style="width:36%"></i></div>
+    <div class="gap"><b>Прогалина:</b> нормативні документи — 0 із 3 обовʼязкових. Найсвіжіший практичний досвід — 2025, нормативна база — 2015.</div>
+    <button class="btn p" style="margin-top:2px">Зібрати відсутнє (3)</button>
+    <div class="gap" style="border-style:solid"><b>Ревалідація:</b> FM 3-34 — нова редакція 16.12.2025 вже завантажена; стара лишилась як <code>superseded</code>.</div>
+  </div>
+</div>
+
+<div class="status">
+  <span>останній прогін 07.11 11:14 — 33 джерела віддали файли, 9 мережа, 2 заблоковано</span>
+  <span class="spacer"></span><span>журнал · звіт</span>
+</div>
+
+</div></body></html>

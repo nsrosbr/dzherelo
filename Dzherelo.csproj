@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <ApplicationIcon>assets\Dzherelo.ico</ApplicationIcon>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <AssemblyName>Dzherelo</AssemblyName>
+    <RootNamespace>Dzherelo</RootNamespace>
+    <Version>2.0.0</Version>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <NoWarn>$(NoWarn);MSB3277</NoWarn>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="_legacy/**" />
+    <None Remove="_legacy/**" />
+    <EmbeddedResource Include="sources.json" />
+    <EmbeddedResource Include="fonts\*.ttf">
+      <LogicalName>Dzherelo.Fonts.%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
+    <None Update="sources.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,103 @@
+<!doctype html><html lang="uk"><head><meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:transparent}
+.w{width:980px;color:var(--foreground);font-size:13px;line-height:1.45}
+.h{display:flex;align-items:baseline;gap:10px;margin-bottom:10px}
+.h b{font-size:15px;font-weight:600}
+.mut{color:var(--muted-foreground)}
+.pill{font-size:11px;padding:1px 8px;border:1px solid var(--border);border-radius:99px;color:var(--muted-foreground)}
+.kpi{display:flex;gap:8px;margin-bottom:12px}
+.k{flex:1;border:1px solid var(--border);border-radius:8px;padding:9px 11px}
+.k .n{font-size:20px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.1}
+.k .l{font-size:11px;color:var(--muted-foreground);margin-top:2px}
+.cols{display:flex;gap:12px}
+.col{flex:1;min-width:0}
+h4{margin:0 0 7px;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted-foreground);font-weight:600}
+.row{display:flex;gap:8px;padding:4px 0;border-bottom:1px solid color-mix(in srgb,var(--border) 45%,transparent);align-items:baseline}
+.row:last-child{border-bottom:none}
+.tick{width:13px;flex:0 0 13px;color:var(--accent);font-weight:700}
+.tick.todo{color:var(--muted-foreground);font-weight:400}
+.row .t{flex:1;min-width:0}
+.row .t small{display:block;color:var(--muted-foreground);font-size:11px}
+table{width:100%;border-collapse:collapse;margin-top:2px}
+th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted-foreground);font-weight:600;padding:5px 8px;border-bottom:1px solid var(--border)}
+td{padding:5px 8px;border-bottom:1px solid color-mix(in srgb,var(--border) 45%,transparent);font-size:12px}
+td.n{font-variant-numeric:tabular-nums;white-space:nowrap}
+.st{font-size:11px;padding:0 6px;border-radius:4px;border:1px solid var(--border);white-space:nowrap}
+.st.ok{border-color:var(--accent);color:var(--accent)}
+.st.no{opacity:.55}
+.bar{display:flex;height:7px;border-radius:99px;overflow:hidden;border:1px solid var(--border);margin:6px 0 4px}
+.bar i{display:block;height:100%}
+.lg{display:flex;gap:14px;font-size:11px;color:var(--muted-foreground);margin-bottom:14px}
+.sep{height:1px;background:var(--border);margin:12px 0}
+.act{display:flex;gap:8px;margin-top:10px}
+button{font:inherit;font-size:12px;padding:5px 11px;border-radius:6px;border:1px solid var(--border);background:transparent;color:inherit;cursor:pointer}
+button.p{background:var(--accent);border-color:var(--accent);color:var(--card);font-weight:600}
+</style></head><body><div class="w">
+
+<div class="h"><b>Dzherelo</b>
+  <span class="mut">збирач документів · Windows · .NET 10</span>
+  <span class="pill">SPEC v0.3.1</span><span class="pill">збірка 16:40</span>
+</div>
+
+<div class="kpi">
+  <div class="k"><div class="n">81</div><div class="l">перевірка selftest · усі зелені</div></div>
+  <div class="k"><div class="n">4 450</div><div class="l">рядків C# у 19 файлах</div></div>
+  <div class="k"><div class="n">87</div><div class="l">джерел у реєстрі</div></div>
+  <div class="k"><div class="n">26</div><div class="l">дефектів аудиту виправлено</div></div>
+</div>
+
+<div class="cols">
+  <div class="col">
+    <h4>Зроблено</h4>
+    <div class="row"><span class="tick">✓</span><span class="t">Каталог як джерело істини<small>rev · tombstone · компакція · ремонт хвоста · lock</small></span></div>
+    <div class="row"><span class="tick">✓</span><span class="t">Конвенція дерева<small>7 типів · 120 символів · серія+назва · хеш лише при збігу</small></span></div>
+    <div class="row"><span class="tick">✓</span><span class="t">Міграція колекції<small>--reindex: 33 файли → 33 записи, ідемпотентно</small></span></div>
+    <div class="row"><span class="tick">✓</span><span class="t">Черга дошукування<small>8 кодів · автомат · перевірено на мертвому посиланні</small></span></div>
+    <div class="row"><span class="tick">✓</span><span class="t">Перед-гейт формату<small>HTML під .pdf не стає документом</small></span></div>
+    <div class="row"><span class="tick">✓</span><span class="t">Один звіт<small>reports/&lt;run_id&gt;.json + .md з одного обʼєкта</small></span></div>
+    <div class="row"><span class="tick">✓</span><span class="t">Реєстр тем і покриття<small>--topics: числа + прогалини</small></span></div>
+    <div class="row"><span class="tick">✓</span><span class="t">Ред-аудит у два проходи<small>7 лінз → 34 кластери → верифікатор</small></span></div>
+  </div>
+
+  <div class="col">
+    <h4>Далі</h4>
+    <div class="row"><span class="tick todo">○</span><span class="t">Повтор черги перед прогоном<small>поки кожна невдача коштує повного проходу</small></span></div>
+    <div class="row"><span class="tick todo">○</span><span class="t">Теми у вікні<small>зараз лише CLI</small></span></div>
+    <div class="row"><span class="tick todo">○</span><span class="t">Ревалідація редакцій<small>Editions готовий, у цикл не вбудований</small></span></div>
+    <div class="row"><span class="tick todo">○</span><span class="t">HTML → PDF за каноном<small>чекає твій приклад</small></span></div>
+    <div class="row"><span class="tick todo">○</span><span class="t">Секрети з DPAPI у налаштуваннях<small>Secrets готовий, ключ ще в відкритому файлі</small></span></div>
+    <div class="row"><span class="tick todo">○</span><span class="t">Самолікування джерел<small>лікує лише жорсткі збої, без staging</small></span></div>
+    <div class="row"><span class="tick todo">○</span><span class="t">Встановлення й оновлення<small>механіка Valera, ще не зібрано</small></span></div>
+  </div>
+</div>
+
+<div class="sep"></div>
+
+<h4>Модулі</h4>
+<table>
+  <tr><th>Файл</th><th>Рядків</th><th>Розділ</th><th>Підключено</th></tr>
+  <tr><td>Catalog.cs</td><td class="n">449</td><td class="mut">§6 каталог</td><td><span class="st ok">у циклі</span></td></tr>
+  <tr><td>Naming.cs</td><td class="n">108</td><td class="mut">§5 дерево</td><td><span class="st ok">у циклі</span></td></tr>
+  <tr><td>FormatGate.cs</td><td class="n">171</td><td class="mut">§11 формат</td><td><span class="st ok">на завантаженні</span></td></tr>
+  <tr><td>Reacquire.cs</td><td class="n">348</td><td class="mut">§11 черга</td><td><span class="st">пише, не читає</span></td></tr>
+  <tr><td>Report.cs</td><td class="n">248</td><td class="mut">§21 звіт</td><td><span class="st ok">у циклі</span></td></tr>
+  <tr><td>Editions.cs</td><td class="n">186</td><td class="mut">§10 редакції</td><td><span class="st">ключ пишеться</span></td></tr>
+  <tr><td>Topics.cs</td><td class="n">190</td><td class="mut">§16 покриття</td><td><span class="st">CLI</span></td></tr>
+  <tr><td>Secrets.cs</td><td class="n">132</td><td class="mut">§18 секрети</td><td><span class="st no">не підключено</span></td></tr>
+</table>
+
+<div class="sep"></div>
+
+<h4>Аудит — 56 знахідок із семи лінз</h4>
+<div class="bar"><i style="width:76%;background:var(--accent)"></i><i style="width:18%;opacity:.45;background:currentColor"></i><i style="width:6%;opacity:.2;background:currentColor"></i></div>
+<div class="lg"><span>26 виправлено</span><span>6 питань до власника</span><span>2 відкинуто з причиною</span><span>4 суперечності знайшов верифікатор</span></div>
+
+<div class="act">
+  <button class="p" data-hermes-send="покажи що зараз відбувається в проєкті">Що зараз робиться</button>
+  <button data-hermes-send="які наступні три кроки, у порядку">Наступні кроки</button>
+  <button data-hermes-send="перезапусти selftest і покажи результат">Перевірити збірку</button>
+</div>
+
+</div></body></html>

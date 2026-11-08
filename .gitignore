@@ -1,0 +1,43 @@
+# збірка
+bin/
+obj/
+release/
+publish/
+*.user
+
+# колекції й тестові прогони
+_live/
+_demo/
+_demo_canon/
+_audit/
+_final/
+_par/
+_r*/
+_t/
+_q/
+_rt*/
+
+# секрети й токени НІКОЛИ не в репозиторій
+_ghtoken.txt
+*.pfx
+*.dat
+settings.json
+
+# копія канону (зовнішній артефакт, не наш код)
+_canon/
+
+# сміття
+*.log
+_gui*.png
+_sizes.png
+_from_exe.png
+_sizes.png
+_t_rel.*
+
+# тестові артефакти прогонів
+_ap/
+_apd/
+selftest_out/
+--out/
+response-*.txt
+selftest-report.txt

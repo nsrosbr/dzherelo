@@ -1,0 +1,138 @@
+{
+ "updated_at": "2026-11-08T13:17:28",
+ "tasks": [
+  {
+   "id": "T1",
+   "state": "done",
+   "title": "Повтор черги перед прогоном",
+   "proof": "5 прогонів на мертвому посиланні: queued→retry→closed, далі не росте; 82 перевірки",
+   "updated_at": "2026-11-07T17:01:14"
+  },
+  {
+   "id": "T2",
+   "state": "done",
+   "title": "Ревалідація редакцій у циклі",
+   "why": "Editions видає ключі, але цикл їх не порівнює: нова редакція не позначає стару superseded",
+   "done_when": "після прогону документ із новішим edition_key має relations.wasRevisionOf, старий status=superseded; є тест",
+   "proof": "Editions.Revalidate: групує за серією, новіша редакція отримує relations.wasRevisionOf на попередницю, старіша status=superseded; тест у selftest (80+ перевірок зелених)",
+   "updated_at": "2026-11-07T17:22:00"
+  },
+  {
+   "id": "T3",
+   "state": "done",
+   "title": "Курсори джерел",
+   "why": "перерваний прогін починає джерело з початку; список документів перечитується щоразу",
+   "done_when": "state/cursors.json; повторний прогін не перечитує вже пройдені сторінки; є тест",
+   "updated_at": "2026-11-07T17:49:50",
+   "proof": "state/cursors.json: oai резюмує з resumptionToken, dspace/wp з номера сторінки; Cursors.SelfCheck 5 перевірок зелених, build+selftest «УСІ ПЕРЕВІРКИ ПРОЙДЕНО»"
+  },
+  {
+   "id": "T4",
+   "state": "done",
+   "title": "Теми у вікні",
+   "why": "покриття рахується лише в CLI",
+   "done_when": "у MainForm є панель тем із числами й станами; збірка й selftest зелені",
+   "updated_at": "2026-11-07T18:12:08",
+   "proof": "TabControl «Теми»: стовпці тема/стан/документів/найсвіжіший/підстава через Topics.Compute; оновлюється при запуску (RefreshTopicsFromDisk) і після прогону (RefreshTopics поверх живого Catalog); build 0 errors + selftest «УСІ ПЕРЕВІРКИ ПРОЙДЕНО»"
+  },
+  {
+   "id": "T5",
+   "state": "done",
+   "title": "Секрети через DPAPI",
+   "why": "ключ OpenRouter і логіни проксі лежать відкритим текстом у налаштуваннях",
+   "done_when": "AppSettings читає/пише через Secrets; у файлі налаштувань немає ключа; є тест",
+   "updated_at": "2026-11-07T18:34:38",
+   "proof": "AppSettings.OpenRouterKey + SetProxyCredentials через Secrets (DPAPI); сіріалізовані налаштування без OpenRouter-поля; 3 перевірки SelfCheck зелені; build 0 errors + selftest «УСІ ПЕРЕВІРКИ ПРОЙДЕНО»"
+  },
+  {
+   "id": "T6",
+   "state": "done",
+   "title": "Самолікування джерел зі staging",
+   "why": "лікує лише жорсткі збої, кандидат не перевіряється на відомому наборі URL",
+   "done_when": "кандидатний метод приймається лише за збігом набору URL; є --revert-adapter",
+   "updated_at": "2026-11-07T18:58:00",
+   "proof": "AdapterHeal: SameUrlSet (точний збіг набору, не «хоч один»), CandidateKinds, staging HealAsync (+1 на перелишок), State override/revert у state/adapters.json; --revert-adapter у CLI; 11 перевірок SelfCheck зелених; build 0 errors + selftest «УСІ ПЕРЕВІРКИ ПРОЙДЕНО»"
+  },
+  {
+   "id": "T7",
+   "state": "done",
+   "title": "HTML→PDF стилем канону (без бланка)",
+   "why": "власник: «без емблем і службових підписів лише стиль»; DOCX-рушій fail-closed і тягне Word/cairosvg — у застосунок не йде. Демо: _demo_canon/style-demo.html",
+   "updated_at": "2026-11-07T19:34:39",
+   "done_when": "сторінка без PDF зберігається стилем канону: A4, поля 30/20/20/20, PT Sans 10,5, Montserrat капсом, акцент #F29222, лінійки 0,5/1/1,5 pt, колонтитул «бібліотека · тема · дата · стор. N»",
+   "approach": "ds/tokens.json -> CSS -> WebView2 PrintToPdfAsync; нуль python-залежностей",
+   "proof": "CanonPdf: Css/Document/ExtractText/RenderToPdfAsync (WebView2 PrintToPdfAsync, нуль python); стиль без бланка — A4, поля 30/20/20/20, PT Sans 10,5, Montserrat капсом, акцент #F29222, лінійки 0,5/1/1,5pt, колонтитул «бібліотека · тема · дата · стор. N»; сторінка без PDF йде в SavePageAsCanonAsync + fallback на чистий HTML. Доказ: build 0 err, selftest «УСІ ПЕРЕВІРКИ ПРОЙДЕНО» з 10 перевірками канону; --canon робить %PDF-1.4 40 КБ із вбудованими підмножинами PTSans/Montserrat (FontFile:3)"
+  },
+  {
+   "id": "T8",
+   "state": "done",
+   "title": "Встановлення й оновлення",
+   "why": "механіка Valera описана, не зібрана",
+   "done_when": "build/package/sign/publish за зразком; реліз — один файл",
+   "updated_at": "2026-11-07T20:01:00",
+   "proof": "build/package/sign/publish/release.ps1 за зразком Valera; IncludeNativeLibrariesForSelfExtract у csproj робить реліз одним файлом: package.ps1 -> release/Dzherelo.exe (111 317 788 байт, 0 .dll/.deps.json/.runtimeconfig.json) + release/latest.txt (4 рядки: version/url/sha256/notes); build 0 errors, selftest «УСІ ПЕРЕВІРКИ ПРОЙДЕНО» на зібраному single-file exe, --canon рендерить PDF із того ж exe; sign fail-closed, publish чекає repo+токен (T11)"
+  },
+  {
+   "id": "T9",
+   "state": "done",
+   "title": "Інсталятор із передперевіркою системи",
+   "updated_at": "2026-11-07T20:28:00",
+   "why": "замовлено: інсталятор сам докачує й ставить усе потрібне",
+   "done_when": "Setup.exe: сканує систему (WebView2 Runtime, .NET, права, місце), докочує відсутнє, ставить per-user, пише ARP",
+   "proof": "Setup: --setup або ім'я Setup.exe ведуть у Setup.Run — сканує WebView2 (GUID {F3017226})/.NET/права запису/вільне місце, докочує WebView2 bootstrapper (go.microsoft.com/fwlink/?LinkId=2124703) якщо немає, копіює exe у LOCALAPPDATA/Dzherelo/app/<ver>/, пише ARP (HKCU Uninstall; portable.txt пропускається). Доказ: build 0 errors + selftest УСІ ПЕРЕВІРКИ ПРОЙДЕНО (6 перевірок setup зелених); живий --setup: WebView2 157.0.4341.42, права OK, 48,5 ГБ OK, встановив C:/Users/Amigo/AppData/Local/Dzherelo/app/2.0.0/Dzherelo.exe + 9 значень ARP у реєстрі; exe під іменем Setup.exe роутить у setup-режим; package.ps1 кладе release/Setup.exe"
+  },
+  {
+   "id": "T10",
+   "state": "done",
+   "title": "Деінсталяція з опціями",
+   "updated_at": "2026-11-07T20:53:04",
+   "why": "замовлено: коректно прибирає за собою, з вибором",
+   "done_when": "два режими: «без слідів» (усе, включно з журналами й кешем) і «лишити дані»; тека бібліотеки не чіпається без підтвердження",
+   "proof": "Setup.Uninstall: два режими (--uninstall лишає дані, --uninstall --purge без слідів) + окреме --remove-library для бібліотеки. Доказ: build 0 errors + selftest УСІ ПЕРЕВІРКИ ПРОЙДЕНО (3 перевірки uninstall); живий --uninstall прибрав app/2.0.0/Dzherelo.exe й ARP, лишив data/secrets.dat + 6 шрифтів; --purge прибрав цілий %LOCALAPPDATA%/Dzherelo; бібліотека без --remove-library не чіпається; стан відновлено через --setup"
+  },
+  {
+   "id": "T11",
+   "state": "blocked",
+   "title": "Канал оновлень",
+   "updated_at": "2026-11-07T17:14:30",
+   "why": "чекає репозиторій і токен від власника",
+   "done_when": "latest.txt із 4 рядків, 2 асети, підпис сертом Valera, зовнішня верифікація після публікації"
+  },
+  {
+   "id": "T12",
+   "state": "done",
+   "title": "Нативність Windows",
+   "updated_at": "2026-11-07T21:17:44",
+   "why": "замовлено: максимально нативний",
+   "done_when": "один екземпляр, прогрес у таскбарі, DPI 150%, без консольних вікон, ярлики, drag&drop файлів у вікно",
+   "proof": "один екземпляр (Mutex Dzherelo.SingleInstance у Program.cs), прогрес у таскбарі (TaskbarProgress/ITaskbarList3), DPI PerMonitorV2, WinExe без консольного вікна, ярлики Start menu+Desktop через WScript.Shell у Setup, drag&drop PDF/файлів у вікно -> Harvester.IngestLocal. Доказ: build 0 errors + selftest УСІ ПЕРЕВІРКИ ПРОЙДЕНО (4 перевірки ingest + setup: ярлик створюється WScript.Shell)"
+  },
+  {
+   "id": "T13",
+   "state": "done",
+   "updated_at": "2026-11-07T17:50:39",
+   "title": "Схеми через diagram-design у стилі канону",
+   "why": "скіл встановлено в ~/.claude/skills/diagram-design, токени й шрифти канону внесено, font source = system",
+   "done_when": "перша схема (потік бібліотека→адаптер→гейт→каталог) згенерована з токенами doc-canon, шрифти Montserrat/PT Sans резолвляться локально, без Google Fonts",
+   "proof": "_demo_canon/diagram-pipeline.html → diagram.png 1920×920; 5 вузлів + черга; шрифти Montserrat/PT Sans/PT Sans Narrow локальні, жодного запиту в Google Fonts"
+  },
+  {
+   "id": "T14",
+   "state": "done",
+   "updated_at": "2026-11-07T18:13:41",
+   "title": "Схеми в документі: розвилки, перетини, скруглення",
+   "why": "власник: блоки зі скругленням, стрілки в край, складний потік із перетинами",
+   "done_when": "генератор схем у застосунку дає: rx=6 на блоках; кожна стрілка закінчується на межі блока (автоперевірка «повз блок = 0»); перетини з розривом лінії; розвилка з 3 виходів і пунктирний повтор",
+   "proof": "_demo_canon/doc-diagrams.pdf: 4 арк. (портрет/альбом/альбом/портрет), 27 блоків, 22 стрілки, повз блок — 0, sha256 стабільний на двох прогонах, 6 шрифтів канону, чужих 0"
+  },
+  {
+   "id": "T15",
+   "state": "done",
+   "updated_at": "2026-11-08T13:17:28",
+   "title": "Приймання: живі прогони й виправлення знайденого",
+   "proof": "живий збір: 29 PDF / 111 МБ, каталог 29 = файлів 29, cursors+reacquire; цикл інсталятора purge→setup→запуск; release selftest зелений; GUI: джерела+теми з даними. Виправлено 6 дефектів: --canon відносний шлях, --help висів, кодування консолі, whitelist ключів, --topics без значення запускав збір, Setup копіював лише себе (app не стартував)",
+   "why": "закрито ревізію перед передачею; T11 лишається заблокованим на репозиторії й токені"
+  }
+ ],
+ "scope": "B: exe + інсталятор + підпис + канал оновлень + документація за каноном + деінсталяція з опціями"
+}

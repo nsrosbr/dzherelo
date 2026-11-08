@@ -1,0 +1,16 @@
+﻿== Dzherelo selftest ==
+2026-10-29 20:03:06
+╨ƒ╨╛╨╗╤Å: 25 (╨╛╤ç╤û╨║╤â╤ö╤é╤î╤ü╤Å 25)
+╨ô╤Ç╤â╨┐╨╕: 251 (╨╛╤ç╤û╨║╤â╤ö╤é╤î╤ü╤Å 251)
+╨ô╤Ç╤â╨┐ ╨┐╨╛ ╨┐╨╛╨╗╤Å╤à: 01=18, 02=6, 03=3, 04=2, 05=9, 06=15, 07=6, 08=12, 09=7, 10=4, 11=15, 12=9, 13=15, 14=5, 15=16, 16=9, 17=21, 18=12, 19=15, 20=16, 21=13, 22=5, 23=6, 24=7, 25=5
+╨ƒ╨╛╤ê╤â╨║ DTIC: ╨Æ╨ÿ╨£╨Ü╨¥╨ò╨¥╨₧ (╤ü╨┐╨╕╤ü╨╛╨║ ╨┤╨╛╨║╤â╨╝╨╡╨╜╤é╤û╨▓ ╤ç╨╡╤Ç╨╡╨╖ ╨┐╨╛╤ê╤â╨║ ╨╜╨╡╨┤╨╛╤ü╤é╤â╨┐╨╜╨╕╨╣)
+╨ó╨╡╨║╨░ 1: D:\VS\Dzherelo\selftest_out\15. Military Sciences\15.06 Military Operations, Strategy and Tactics
+╨ó╨╡╨║╨░ 2: D:\VS\Dzherelo\selftest_out\01. Aviation Technology\01.03 Aircraft
+archive.org: ╨┐╨╡╤Ç╨╡╨▓╤û╤Ç╤Å╤Ä DTIC_ADA244690
+archive.org: ╨╖╨╜╨░╨╣╨┤╨╡╨╜╨╛ PDF ╨┤╨╗╤Å ADA244690
+╨╖╨▒╨╡╤Ç╨╡╨╢╨╡╨╜╨╛ D:\VS\Dzherelo\selftest_out\download_out\01. Aviation Technology\01.03 Aircraft\ADA244690_Selftest sample B.pdf (3019713 ╨▒╨░╨╣╤é)
+archive.org: ╨┐╨╡╤Ç╨╡╨▓╤û╤Ç╤Å╤Ä DTIC_AD1158949
+╨╜╨╡ ╨▓╨┤╨░╨╗╨╛╤ü╤Å AD1158949: HTTP 200 (╨┐╤Ç╨╛╨┤╨╛╨▓╨╢╤â╤Ä)
+╨ù╨░╨▓╨░╨╜╤é╨░╨╢╨╡╨╜╨╛: 1; ╨╖╤â╨┐╨╕╨╜╨╡╨╜╨╛: False ()
+  failed: AD1158949 | 15. Military Sciences | 15.06 Military Operations, Strategy and Tactics | HTTP 200
+EXIT=0
