@@ -47,6 +47,8 @@ public sealed class Harvester
     public Action<int, int>? OnProgress { get; set; }
     public Action<string>? OnSourceState { get; set; }
     public Action<SourceResult>? OnSourceDone { get; set; }
+    /// <summary>Жива стрічка документів: джерело, адреса, стан, байти. Для екрана «Документи».</summary>
+    public Action<string, string, string, long>? OnDoc { get; set; }
     private Reacquire? _queue;
     private Cursors? _cursors;
     private AdapterHeal.State? _heal;
@@ -154,6 +156,8 @@ public sealed class Harvester
                 }
                 r.Expected = stats.Expected;
                 r.Found = docs.Count;
+                if (OnDoc != null)
+                    foreach (var d in docs) OnDoc(r.Name, d.Url, "знайдено", 0);
                 if (stats.Capped) r.Note = "обмежено " + MaxDocsPerSource + " документами";
                 Log("  знайдено " + docs.Count + (stats.Expected > 0 ? " з " + stats.Expected : "") + ", обробляю…");
 
@@ -208,7 +212,8 @@ public sealed class Harvester
             catch (BlockedException ex)
             {
                 r.Status = SourceStatus.Blocked;
-                r.Note = ex.Message;
+                // не затираємо «обмежено N документами»: обидві причини мають лишитись у звіті
+                r.Note = r.Note.Length == 0 ? ex.Message : r.Note + "; " + ex.Message;
                 Log("  ⛔ " + ex.Message);
             }
             catch (NetworkDownException ex)
@@ -463,6 +468,7 @@ public sealed class Harvester
         r.NewDocIds.Add(saved.Sha.Length >= 16 ? saved.Sha[..16] : saved.Sha);
         r.Bytes += saved.Size;
         Log("  + " + Short(targetUrl) + " (" + (saved.Size / 1024 / 1024.0).ToString("0.0") + " МБ)");
+        OnDoc?.Invoke(s.Name, targetUrl, "завантажено", saved.Size);
     }
 
     // Full URLs go to the log file: a truncated one cannot be re-checked or fixed later.
@@ -551,6 +557,7 @@ public sealed class Harvester
         r.Failed++;
         if (r.Failures.Count < 5) r.Failures.Add(reason);
         Log("  ! " + Short(url) + " — " + reason);
+        OnDoc?.Invoke(r.Name, url, "помилка: " + reason, 0);
     }
 
     // 403 від ОКРЕМОГО документа (часто чужий хост у посиланні) — це провал документа, не джерела.
@@ -561,6 +568,7 @@ public sealed class Harvester
         r.Failed++;
         if (r.Failures.Count < 5) r.Failures.Add(reason);
         Log("  ⛔ " + reason + " " + Short(url));
+        OnDoc?.Invoke(r.Name, url, reason, 0);
     }
 
     private void Gate(SourceResult r, string url, string reason, string? code = null)

@@ -24,8 +24,13 @@ internal sealed class MainForm : ThemedForm
     private SplitContainer _body = null!, _right = null!;
     private Label _lblState = null!;
     private ListView _topics = null!;
-    private Panel _pageSources = null!, _pageTopics = null!;
-    private Button _segSources = null!, _segTopics = null!;
+    private Panel _pageSources = null!, _pageTopics = null!, _pageDocs = null!;
+    private Button _segSources = null!, _segTopics = null!, _segDocs = null!;
+    private ListView _docs = null!;
+    private CheckBox _onlySel = null!;
+    private Label _lblDocsCount = null!;
+    private readonly List<(string T, string Src, string Url, string St, long Bytes)> _docRows = new();
+    private const int DocRowsMax = 3000;
     private Label _lblSubtitle = null!;
     private readonly TaskbarProgress _taskbar = new();
 
@@ -126,9 +131,14 @@ internal sealed class MainForm : ThemedForm
         var seg = new FlowLayoutPanel { Dock = DockStyle.Fill, BackColor = Theme.PageBg, WrapContents = false };
         _segSources = SegBtn("Джерела");
         _segTopics = SegBtn("Теми");
+        _segDocs = SegBtn("Документи");
+        _onlySel = new CheckBox { Text = "лише вибране джерело", AutoSize = true, Font = Theme.Caption, Margin = new Padding(16, 9, 0, 0) };
+        _onlySel.CheckedChanged += (_, _) => RebuildDocs();
+        _lblDocsCount = new Label { AutoSize = true, Font = Theme.Caption, Margin = new Padding(12, 9, 0, 0), Text = "0" };
+        _segDocs.Click += (_, _) => SetPage(2);
         _segSources.Click += (_, _) => SetPage(0);
         _segTopics.Click += (_, _) => SetPage(1);
-        seg.Controls.AddRange(new Control[] { _segSources, _segTopics });
+        seg.Controls.AddRange(new Control[] { _segSources, _segTopics, _segDocs, _onlySel, _lblDocsCount });
         segRow.Controls.Add(seg);
 
         // ---- вміст ----
@@ -156,6 +166,13 @@ internal sealed class MainForm : ThemedForm
         _topics.Columns.Add("Найсвіжіший", 90, HorizontalAlignment.Right);
         _topics.Columns.Add("Підстава", 520);
 
+        _docs = new ListView { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, GridLines = false, BorderStyle = BorderStyle.None, Font = Theme.Body };
+        _docs.Columns.Add("Час", 70);
+        _docs.Columns.Add("Джерело", 190);
+        _docs.Columns.Add("Стан", 170);
+        _docs.Columns.Add("Розмір", 80, HorizontalAlignment.Right);
+        _docs.Columns.Add("Адреса", 620);
+
         _right = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, SplitterWidth = 8, BackColor = Theme.PageBg };
         _right.Panel1.Controls.Add(CardOf("Результати джерел", _list));
         _right.Panel2.Controls.Add(CardOf("Журнал", _txtLog));
@@ -172,6 +189,9 @@ internal sealed class MainForm : ThemedForm
         var host = new Panel { Dock = DockStyle.Fill, Padding = new Padding(18, 0, 18, 6), BackColor = Theme.PageBg };
         host.Controls.Add(_pageSources);
         host.Controls.Add(_pageTopics);
+        _pageDocs = new Panel { Dock = DockStyle.Fill, BackColor = Theme.PageBg, Visible = false };
+        _pageDocs.Controls.Add(CardOf("Документи — що знайдено і що качається", _docs));
+        host.Controls.Add(_pageDocs);
 
         // Docking застосовується від останнього доданого — тому контент додаємо ПЕРШИМ,
         // а шапку ОСТАННЬОЮ, інакше заголовок опиняється під панеллю дій.
@@ -244,11 +264,61 @@ internal sealed class MainForm : ThemedForm
 
     private void SetPage(int index)
     {
-        if (_pageSources is null || _pageTopics is null) return;
+        if (_pageSources is null || _pageTopics is null || _pageDocs is null) return;
         _pageSources.Visible = index == 0;
         _pageTopics.Visible = index == 1;
+        _pageDocs.Visible = index == 2;
         StyleSeg(_segSources, index == 0);
         StyleSeg(_segTopics, index == 1);
+        StyleSeg(_segDocs, index == 2);
+    }
+
+    // Жива стрічка: «знайдено» приходить одразу після розбору списку, «завантажено» — по факту.
+    private void AddDoc(string src, string url, string state, long bytes)
+    {
+        _docRows.Add((DateTime.Now.ToString("HH:mm:ss"), src, url, state, bytes));
+        if (_docRows.Count > DocRowsMax) _docRows.RemoveRange(0, _docRows.Count - DocRowsMax);
+
+        var selected = SelectedSourceName();
+        if (_onlySel.Checked && selected.Length > 0 && !string.Equals(selected, src, StringComparison.OrdinalIgnoreCase))
+            return;
+        AddDocRow(_docRows[^1]);
+    }
+
+    private void AddDocRow((string T, string Src, string Url, string St, long Bytes) r)
+    {
+        var item = new ListViewItem(r.T);
+        item.SubItems.Add(r.Src);
+        item.SubItems.Add(r.St);
+        item.SubItems.Add(r.Bytes > 0 ? (r.Bytes / 1024 / 1024.0).ToString("0.0") + " МБ" : "");
+        item.SubItems.Add(r.Url);
+        item.ForeColor = r.St switch
+        {
+            "завантажено" => Theme.IsDark ? Color.FromArgb(120, 200, 130) : Color.FromArgb(20, 110, 40),
+            "знайдено" => Theme.TextSecondary,
+            _ => Theme.IsDark ? Color.FromArgb(230, 150, 120) : Color.FromArgb(170, 30, 30),
+        };
+        _docs.Items.Add(item);
+        if (_docs.Items.Count > DocRowsMax) _docs.Items.RemoveAt(0);
+        if (_docs.Visible) _docs.EnsureVisible(_docs.Items.Count - 1);
+        _lblDocsCount.Text = _docRows.Count.ToString("N0") + " подій";
+    }
+
+    private void RebuildDocs()
+    {
+        _docs.BeginUpdate();
+        _docs.Items.Clear();
+        var selected = SelectedSourceName();
+        foreach (var r in _docRows)
+            if (!_onlySel.Checked || selected.Length == 0 || string.Equals(selected, r.Src, StringComparison.OrdinalIgnoreCase))
+                AddDocRow(r);
+        _docs.EndUpdate();
+    }
+
+    private string SelectedSourceName()
+    {
+        if (_tree.SelectedNode is { } n && _nodes.ContainsValue(n)) return n.Text.Split("  ·  ")[0];
+        return "";
     }
 
     private static void StyleSeg(Button b, bool active)
@@ -270,6 +340,7 @@ internal sealed class MainForm : ThemedForm
         Ui.Apply(this);            // усі контроли, включно з тими, що малюють себе самі
         Ui.ThemeListView(_list);
         Ui.ThemeListView(_topics);
+        Ui.ThemeListView(_docs);
         SetPage(_pageTopics?.Visible == true ? 1 : 0);
         Invalidate(true);
     }
@@ -420,6 +491,7 @@ internal sealed class MainForm : ThemedForm
                 _lblState.Text = $"{done} / {total}";
             }),
             OnSourceDone = r => RunOnUi(() => AddResult(r)),
+            OnDoc = (src, url, state, bytes) => RunOnUi(() => AddDoc(src, url, state, bytes)),
         };
         _cts = new CancellationTokenSource();
         _lastRunId = harvester.RunId;
