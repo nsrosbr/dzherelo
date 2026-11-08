@@ -24,7 +24,9 @@ public sealed class MainForm : Form
     private SplitContainer _body = null!, _right = null!;
     private Label _lblState = null!;
     private ListView _topics = null!;
-    private TabControl _tabs = null!;
+    private Panel _pageSources = null!, _pageTopics = null!;
+    private Button _segSources = null!, _segTopics = null!;
+    private Label _lblSubtitle = null!;
     private readonly TaskbarProgress _taskbar = new();
 
     public MainForm()
@@ -57,35 +59,81 @@ public sealed class MainForm : Form
 
     private void BuildUi()
     {
-        var row1 = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(8, 8, 8, 2), WrapContents = false };
-        _btnRun = Big("ЗІБРАТИ", 150);
-        _btnRun.Font = new Font(_btnRun.Font.FontFamily, 10f, FontStyle.Bold);
-        _btnStop = Btn("Стоп"); _btnStop.Enabled = false;
-        _chkNew = new CheckBox { Text = "лише нове", Checked = true, AutoSize = true, Margin = new Padding(16, 9, 0, 0) };
-        _numSince = new NumericUpDown { Minimum = 1990, Maximum = 2030, Value = 2022, Width = 64, Margin = new Padding(16, 6, 0, 0) };
-        _btnBrowser = Btn("Браузер (вхід)");
-        _btnReport = Btn("Звіт");
-        _btnLog = Btn("Зберегти лог");
-        _btnOpen = Btn("Тека");
-        _btnSettings = Btn("Параметри…");
-        row1.Controls.AddRange(new Control[]
-        {
-            _btnRun, _btnStop, _chkNew,
-            new Label { Text = "з року:", AutoSize = true, Margin = new Padding(16, 9, 0, 0) }, _numSince,
-            _btnBrowser, _btnReport, _btnLog, _btnOpen, _btnSettings,
-        });
+        SuspendLayout();
+        BackColor = Theme.PageBg;
+        ForeColor = Theme.TextPrimary;
+        Padding = new Padding(0);
 
-        var row2 = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(8, 2, 8, 6), WrapContents = false };
-        _txtOut = new TextBox { Width = 620, Text = _settings.OutputDir ?? "" };
-        _btnBrowse = Btn("…");
-        _lblState = new Label { AutoSize = true, Margin = new Padding(16, 9, 0, 0), Text = "—" };
-        row2.Controls.AddRange(new Control[]
-        {
-            new Label { Text = "Куди збирати:", AutoSize = true, Margin = new Padding(0, 9, 0, 0) }, _txtOut, _btnBrowse, _lblState,
-        });
+        // ---- шапка (як у SettingsForm Valera) ----
+        var header = new Panel { Dock = DockStyle.Top, Height = 76, BackColor = Theme.PageBg };
+        header.Controls.Add(Ui.Title("Dzherelo", 20, 14, 420));
+        _lblSubtitle = Ui.Caption("Збирач відкритих документів", 22, 48, 620);
+        header.Controls.Add(_lblSubtitle);
 
-        _tree = new TreeView { Dock = DockStyle.Fill, CheckBoxes = true, HideSelection = false, Font = new Font("Segoe UI", 9f) };
-        _list = new ListView { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, GridLines = true };
+        // ---- панель дій ----
+        var bar = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top, AutoSize = true, WrapContents = false,
+            Padding = new Padding(18, 2, 18, 8), BackColor = Theme.PageBg,
+        };
+        _btnRun = new Button { Text = "ЗІБРАТИ", Width = 150, Height = 36, Margin = new Padding(0, 0, 8, 0) };
+        _btnStop = NavBtn("Стоп");
+        _btnSettings = NavBtn("Параметри…");
+        _btnOpen = NavBtn("Тека");
+        _btnReport = NavBtn("Звіт");
+        _btnLog = NavBtn("Зберегти лог");
+        _btnBrowser = NavBtn("Браузер (вхід)");
+
+        _chkNew = new CheckBox
+        {
+            Text = "лише нове", Checked = true, AutoSize = true, Font = Theme.Body,
+            Margin = new Padding(20, 11, 0, 0), ForeColor = Theme.TextPrimary,
+        };
+        var lblSince = new Label { Text = "з року:", AutoSize = true, Font = Theme.Body, Margin = new Padding(18, 11, 4, 0), ForeColor = Theme.TextSecondary };
+        _numSince = new NumericUpDown
+        {
+            Minimum = 1990, Maximum = 2035, Value = 2022, Width = 72, Font = Theme.Body,
+            Margin = new Padding(0, 7, 0, 0), BorderStyle = BorderStyle.FixedSingle,
+        };
+        bar.Controls.AddRange(new Control[] { _btnRun, _btnStop, _btnSettings, _btnOpen, _btnReport, _btnLog, _btnBrowser, lblSince, _numSince, _chkNew });
+
+        // ---- тека колекції ----
+        var pathRow = new Panel { Dock = DockStyle.Top, Height = 88, Padding = new Padding(18, 0, 18, 10), BackColor = Theme.PageBg };
+        // Картка шляху: явні координати + Anchor — докінг усередині Card давав нульову висоту полю.
+        var pathCard = new Card { Dock = DockStyle.Fill };
+        var lblPathCap = new Label { Text = "Куди збирати документи", Left = 14, Top = 5, Width = 240, Height = 16, Font = Theme.Caption, ForeColor = Theme.TextSecondary, BackColor = Color.Transparent };
+        _lblState = new Label { Text = "—", Left = 14, Top = 58, Width = 600, Height = 16, Font = Theme.Caption, ForeColor = Theme.TextSecondary, BackColor = Color.Transparent };
+        _txtOut = new TextBox { Left = 14, Top = 25, Width = 400, Height = 26, Text = _settings.OutputDir ?? "", Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
+        Ui.StyleInput(_txtOut);
+        _btnBrowse = new Button { Text = "Огляд…", Left = 420, Top = 21, Width = 92, Height = 30, Anchor = AnchorStyles.Top | AnchorStyles.Right };
+        Ui.StyleSecondary(_btnBrowse);
+        pathCard.Controls.Add(lblPathCap);
+        pathCard.Controls.Add(_lblState);
+        pathCard.Controls.Add(_txtOut);
+        pathCard.Controls.Add(_btnBrowse);
+        void PlacePath()
+        {
+            _btnBrowse.Left = pathCard.Width - 92 - 14;
+            _txtOut.Width = Math.Max(120, _btnBrowse.Left - 14 - 20);
+            lblPathCap.Width = pathCard.Width - 28;
+        }
+        pathCard.Resize += (_, _) => PlacePath();
+        pathCard.HandleCreated += (_, _) => PlacePath();
+        pathRow.Controls.Add(pathCard);
+
+        // ---- перемикач сторінок (замість системного TabControl) ----
+        var segRow = new Panel { Dock = DockStyle.Top, Height = 46, Padding = new Padding(18, 0, 18, 8), BackColor = Theme.PageBg };
+        var seg = new FlowLayoutPanel { Dock = DockStyle.Fill, BackColor = Theme.PageBg, WrapContents = false };
+        _segSources = SegBtn("Джерела");
+        _segTopics = SegBtn("Теми");
+        _segSources.Click += (_, _) => SetPage(0);
+        _segTopics.Click += (_, _) => SetPage(1);
+        seg.Controls.AddRange(new Control[] { _segSources, _segTopics });
+        segRow.Controls.Add(seg);
+
+        // ---- вміст ----
+        _tree = new TreeView { Dock = DockStyle.Fill, CheckBoxes = true, HideSelection = false, BorderStyle = BorderStyle.None, Font = Theme.Body, ItemHeight = 22 };
+        _list = new ListView { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, GridLines = false, BorderStyle = BorderStyle.None, Font = Theme.Body };
         _list.Columns.Add("Джерело", 250);
         _list.Columns.Add("Стан", 92);
         _list.Columns.Add("Знайдено", 74, HorizontalAlignment.Right);
@@ -97,49 +145,58 @@ public sealed class MainForm : Form
 
         _txtLog = new TextBox
         {
-            Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical,
-            Font = new Font("Consolas", 9f), BackColor = Color.FromArgb(250, 250, 250), WordWrap = false,
+            Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, BorderStyle = BorderStyle.None,
+            ScrollBars = ScrollBars.Vertical, Font = new Font("Consolas", 9f), WordWrap = false,
         };
 
-        _right = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal };
-        _right.Panel1.Controls.Add(_list);
-        _right.Panel2.Controls.Add(_txtLog);
-
-        _body = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Vertical };
-        _body.Panel1.Controls.Add(_tree);
-        _body.Panel2.Controls.Add(_right);
-
-        var bottom = new Panel { Dock = DockStyle.Bottom, Height = 44, Padding = new Padding(8, 4, 8, 4) };
-        _prog = new ProgressBar { Dock = DockStyle.Bottom, Height = 16 };
-        var lblHelp = new Label
-        {
-            Dock = DockStyle.Top, Height = 18, ForeColor = Color.DimGray,
-            Text = "Збір іде у фоні — вікно можна згорнути. Прогрес і стан кожного джерела — у журналі.",
-        };
-        bottom.Controls.Add(_prog);
-        bottom.Controls.Add(lblHelp);
-
-        _topics = new ListView { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, GridLines = true };
+        _topics = new ListView { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, GridLines = false, BorderStyle = BorderStyle.None };
         _topics.Columns.Add("Тема", 300);
         _topics.Columns.Add("Стан", 100);
         _topics.Columns.Add("Документів", 90, HorizontalAlignment.Right);
         _topics.Columns.Add("Найсвіжіший", 90, HorizontalAlignment.Right);
         _topics.Columns.Add("Підстава", 520);
 
-        var tabSources = new TabPage("Джерела");
-        tabSources.Controls.Add(_body);
-        var tabTopics = new TabPage("Теми") { Padding = new Padding(6) };
-        tabTopics.Controls.Add(_topics);
-        _tabs = new TabControl { Dock = DockStyle.Fill, DrawMode = TabDrawMode.OwnerDrawFixed, SizeMode = TabSizeMode.Fixed };
-        _tabs.ItemSize = new Size(120, 30);
-        _tabs.DrawItem += DrawTab;
-        _tabs.TabPages.Add(tabSources);
-        _tabs.TabPages.Add(tabTopics);
+        _right = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, SplitterWidth = 8, BackColor = Theme.PageBg };
+        _right.Panel1.Controls.Add(CardOf("Результати джерел", _list));
+        _right.Panel2.Controls.Add(CardOf("Журнал", _txtLog));
 
-        Controls.Add(_tabs);
+        _body = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Vertical, SplitterWidth = 8, BackColor = Theme.PageBg };
+        _body.Panel1.Controls.Add(CardOf("Джерела", _tree));
+        _body.Panel2.Controls.Add(_right);
+
+        _pageSources = new Panel { Dock = DockStyle.Fill, BackColor = Theme.PageBg };
+        _pageSources.Controls.Add(_body);
+        _pageTopics = new Panel { Dock = DockStyle.Fill, BackColor = Theme.PageBg, Visible = false };
+        _pageTopics.Controls.Add(CardOf("Теми", _topics));
+
+        var host = new Panel { Dock = DockStyle.Fill, Padding = new Padding(18, 0, 18, 6), BackColor = Theme.PageBg };
+        host.Controls.Add(_pageSources);
+        host.Controls.Add(_pageTopics);
+
+        // Docking застосовується від останнього доданого — тому контент додаємо ПЕРШИМ,
+        // а шапку ОСТАННЬОЮ, інакше заголовок опиняється під панеллю дій.
+        Controls.Add(host);
+
+        // ---- підвал: прогрес + стан ----
+        var bottom = new Panel { Dock = DockStyle.Bottom, Height = 40, Padding = new Padding(18, 4, 18, 6), BackColor = Theme.PageBg };
+        _prog = new ProgressBar { Dock = DockStyle.Bottom, Height = 6, Style = ProgressBarStyle.Continuous };
+        var lblHelp = new Label
+        {
+            Dock = DockStyle.Fill, Font = Theme.Caption, ForeColor = Theme.TextSecondary,
+            Text = "Збір іде у фоні — вікно можна згорнути.",
+            TextAlign = ContentAlignment.MiddleLeft,
+        };
+        bottom.Controls.Add(lblHelp);
+        bottom.Controls.Add(_prog);
+
+        // порядок докінгу: Fill → Bottom → Top (знизу догори за z-order)
         Controls.Add(bottom);
-        Controls.Add(row2);
-        Controls.Add(row1);
+        Controls.Add(segRow);
+        Controls.Add(pathRow);
+        Controls.Add(bar);
+        Controls.Add(header);
+
+        ResumeLayout(true);
 
         _btnRun.Click += async (_, _) => await RunAsync();
         _btnStop.Click += (_, _) => { _cts?.Cancel(); Log("Зупиняю…"); };
@@ -156,6 +213,49 @@ public sealed class MainForm : Form
         _btnLog.Click += (_, _) => SaveLog(openAfter: true);
         _tree.AfterCheck += TreeAfterCheck;
         _txtOut.Leave += (_, _) => { _settings.OutputDir = _txtOut.Text.Trim(); _settings.Save(); };
+        SetPage(0);
+    }
+
+    // Картка Valera: заголовок розділу + контрол під ним.
+    private static Card CardOf(string title, Control body)
+    {
+        var card = new Card { Dock = DockStyle.Fill, Padding = new Padding(14, 10, 14, 12) };
+        var lbl = Ui.Caption(title, 0, 0, 400);
+        lbl.Dock = DockStyle.Top;
+        lbl.Height = 20;
+        body.Dock = DockStyle.Fill;
+        card.Controls.Add(body);
+        card.Controls.Add(lbl);
+        return card;
+    }
+
+    private Button NavBtn(string text) => new()
+    {
+        Text = text, AutoSize = true, Height = 34, Margin = new Padding(0, 1, 8, 0),
+        Font = Theme.ButtonFont, Padding = new Padding(12, 0, 12, 0), FlatStyle = FlatStyle.Flat,
+    };
+
+    private Button SegBtn(string text) => new()
+    {
+        Text = text, AutoSize = true, Height = 32, Margin = new Padding(0, 0, 8, 0),
+        Font = Theme.Body, Padding = new Padding(18, 0, 18, 0), FlatStyle = FlatStyle.Flat,
+        FlatAppearance = { BorderSize = 0 },
+    };
+
+    private void SetPage(int index)
+    {
+        if (_pageSources is null || _pageTopics is null) return;
+        _pageSources.Visible = index == 0;
+        _pageTopics.Visible = index == 1;
+        StyleSeg(_segSources, index == 0);
+        StyleSeg(_segTopics, index == 1);
+    }
+
+    private static void StyleSeg(Button b, bool active)
+    {
+        b.BackColor = active ? Theme.CardBg : Theme.PageBg;
+        b.ForeColor = active ? Theme.Accent : Theme.TextSecondary;
+        b.Font = active ? Theme.Section : Theme.Body;
     }
 
     // Тема як у Valera: рівні поверхні PageBg → CardBg → ControlBg, акцент лише на головній дії.
@@ -163,7 +263,6 @@ public sealed class MainForm : Form
     {
         BackColor = Theme.PageBg;
         ForeColor = Theme.TextPrimary;
-        Font = Theme.Body;
 
         Ui.StylePrimary(_btnRun);
         foreach (var b in new[] { _btnStop, _btnBrowse, _btnOpen, _btnReport, _btnBrowser, _btnLog, _btnSettings })
@@ -173,58 +272,39 @@ public sealed class MainForm : Form
         {
             c.BackColor = Theme.ControlBg;
             c.ForeColor = Theme.TextPrimary;
-            c.Font = c == _txtLog ? new Font("Consolas", 9f) : Theme.Body;
             Ui.ApplyScrollTheme(c);
         }
-        _tree.BorderStyle = BorderStyle.None;
-        _list.BorderStyle = BorderStyle.None;
-        _topics.BorderStyle = BorderStyle.None;
-        _list.GridLines = false;
-        _topics.GridLines = false;
-        _txtLog.WordWrap = false;
+        _txtLog.BackColor = Theme.CardBg;
         _lblState.ForeColor = Theme.TextSecondary;
+        _lblSubtitle.ForeColor = Theme.TextSecondary;
         _chkNew.ForeColor = Theme.TextPrimary;
 
+        Ui.ThemeListView(_list);
+        Ui.ThemeListView(_topics);
         foreach (Control c in Controls) PaintSurface(c);
-
-        _tabs?.Invalidate();
+        SetPage(_pageTopics?.Visible == true ? 1 : 0);
         Invalidate(true);
     }
 
-    // Фарбуємо лише «поверхні» (панелі/вкладки), а не кожен Label — інакше текст стає сірим на сірому.
+    // Фарбуємо лише поверхні: панелі, картки, розділювачі. Текст не чіпаємо — інакше сірий на сірому.
     private static void PaintSurface(Control c)
     {
         switch (c)
         {
-            case TabControl tabs:
-                tabs.BackColor = Theme.PageBg;
-                foreach (TabPage tp in tabs.TabPages) { tp.BackColor = Theme.PageBg; tp.ForeColor = Theme.TextPrimary; }
-                break;
-            case TabPage tp:
-                tp.BackColor = Theme.PageBg; tp.ForeColor = Theme.TextPrimary;
+            case Card card:
+                card.BackColor = Theme.CardBg;
+                card.Invalidate();
                 break;
             case SplitContainer sc:
-                sc.BackColor = Theme.Divider;
-                sc.SplitterWidth = 1;
+                sc.BackColor = Theme.PageBg;
+                sc.SplitterWidth = 8;
                 PaintSurface(sc.Panel1); PaintSurface(sc.Panel2);
                 break;
             case Panel or FlowLayoutPanel:
-                if (c is SplitterPanel == false) c.BackColor = Theme.PageBg;
+                if (c is not SplitterPanel) c.BackColor = Theme.PageBg;
                 break;
         }
         foreach (Control child in c.Controls) PaintSurface(child);
-    }
-
-    private void DrawTab(object? sender, DrawItemEventArgs e)
-    {
-        var g = e.Graphics;
-        bool sel = e.Index == _tabs.SelectedIndex;
-        var r = e.Bounds;
-        using (var b = new SolidBrush(Theme.PageBg)) g.FillRectangle(b, r);
-        if (sel) using (var b = new SolidBrush(Theme.Accent)) g.FillRectangle(b, r.X + 6, r.Bottom - 3, r.Width - 12, 3);
-        TextRenderer.DrawText(g, _tabs.TabPages[e.Index].Text, sel ? Theme.Section : Theme.Body, r,
-            sel ? Theme.TextPrimary : Theme.TextSecondary,
-            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
     }
 
     private void OpenSettings()

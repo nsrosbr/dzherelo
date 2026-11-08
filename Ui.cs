@@ -443,7 +443,37 @@ namespace Dzherelo
         }
 
         // Open an external URL in the default browser (blog / donation links).
-        public static void OpenUrl(string url)
+        // Системний ListView у темній темі лишає СВІТЛІ/СИНІ заголовки: малюємо самі.
+    public static void ThemeListView(ListView lv)
+    {
+        lv.OwnerDraw = true;
+        lv.BackColor = Theme.ControlBg;
+        lv.ForeColor = Theme.TextPrimary;
+        lv.BorderStyle = BorderStyle.None;
+        lv.DrawColumnHeader += (_, e) =>
+        {
+            using (var b = new SolidBrush(Theme.CardBg)) e.Graphics.FillRectangle(b, e.Bounds);
+            using (var pen = new Pen(Theme.Divider)) e.Graphics.DrawLine(pen, e.Bounds.Left, e.Bounds.Bottom - 1, e.Bounds.Right, e.Bounds.Bottom - 1);
+            var flags = TextFormatFlags.VerticalCenter | TextFormatFlags.Left |
+                        (e.Header.TextAlign == HorizontalAlignment.Right ? TextFormatFlags.Right : TextFormatFlags.Left);
+            var r = Rectangle.Inflate(e.Bounds, -6, 0);
+            TextRenderer.DrawText(e.Graphics, e.Header.Text, Theme.Caption, r, Theme.TextSecondary, flags);
+        };
+        lv.DrawItem += (_, e) => { e.DrawDefault = false; };
+        lv.DrawSubItem += (_, e) =>
+        {
+            bool sel = (e.ItemState & ListViewItemStates.Selected) != 0;
+            using (var b = new SolidBrush(sel ? Theme.GridSelBg : Theme.ControlBg)) e.Graphics.FillRectangle(b, e.Bounds);
+            var flags = TextFormatFlags.VerticalCenter |
+                        (e.Header?.TextAlign == HorizontalAlignment.Right ? TextFormatFlags.Right : TextFormatFlags.Left);
+            var r = Rectangle.Inflate(e.Bounds, -6, 0);
+            TextRenderer.DrawText(e.Graphics, e.SubItem?.Text ?? "", Theme.Body, r,
+                sel ? Theme.TextPrimary : Theme.TextPrimary, flags);
+        };
+        Theme.Changed += lv.Invalidate;
+    }
+
+    public static void OpenUrl(string url)
         {
             try { System.Diagnostics.Process.Start(url); }
             catch
