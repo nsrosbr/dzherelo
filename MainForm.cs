@@ -29,7 +29,7 @@ internal sealed class MainForm : ThemedForm
     private ListView _docs = null!;
     private CheckBox _onlySel = null!;
     private Label _lblDocsCount = null!, _lblDocsTitle = null!;
-    private Button _btnPreview = null!, _btnFetchPicked = null!;
+    private Button _btnPreview = null!, _btnFetchPicked = null!, _btnJudge = null!;
     private readonly List<(string T, string Src, string Url, string St, long Bytes)> _docRows = new();
     private const int DocRowsMax = 3000;
     private Label _lblSubtitle = null!;
@@ -217,21 +217,29 @@ internal sealed class MainForm : ThemedForm
         _pageDocs = new Panel { Dock = DockStyle.Fill, BackColor = Theme.PageBg, Visible = false };
         var docsCard = new Card { Dock = DockStyle.Fill, Padding = new Padding(14, 10, 14, 12) };
         _docs.CheckBoxes = true;
-        var docsBar = new Panel { Dock = DockStyle.Top, Height = 42, BackColor = Theme.CardBg };
-        _btnPreview = new Button { Text = "Оглянути джерело", Left = 0, Top = 4, Width = 170 };
+        var docsBar = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top, Height = 42, BackColor = Theme.CardBg,
+            WrapContents = false, Padding = new Padding(0, 4, 0, 0),
+        };
+        _btnPreview = new Button { Text = "Оглянути джерело", Width = 170, Margin = new Padding(0, 0, 8, 0) };
         Ui.StyleSecondary(_btnPreview);
         _btnPreview.Click += async (_, _) => await PreviewSelectedAsync();
-        _btnFetchPicked = new Button { Text = "Завантажити позначені", Left = 178, Top = 4, Width = 200 };
+        _btnFetchPicked = new Button { Text = "Завантажити позначені", Width = 200, Margin = new Padding(0, 0, 8, 0) };
         Ui.StylePrimary(_btnFetchPicked);
         _btnFetchPicked.Click += async (_, _) => await FetchPickedAsync();
-        var bPickAll = new Button { Text = "усі", Width = 46, Height = 26, Left = 392, Top = 8, FlatStyle = FlatStyle.Flat, Font = Theme.Caption };
+        _btnJudge = new Button { Text = "Судження", Width = 120, Margin = new Padding(0, 0, 8, 0) };
+        Ui.StyleSecondary(_btnJudge);
+        _btnJudge.Click += async (_, _) => await JudgeLibraryAsync();
+        var bPickAll = new Button { Text = "усі", Width = 46, Height = 30, FlatStyle = FlatStyle.Flat, Font = Theme.Caption, Margin = new Padding(8, 0, 0, 0) };
         bPickAll.FlatAppearance.BorderSize = 0; bPickAll.BackColor = Theme.CardBg; bPickAll.ForeColor = Theme.Accent;
         bPickAll.Click += (_, _) => SetAllDocs(true);
-        var bPickNone = new Button { Text = "жодного", Width = 70, Height = 26, Left = 440, Top = 8, FlatStyle = FlatStyle.Flat, Font = Theme.Caption };
+        var bPickNone = new Button { Text = "жодного", Width = 70, Height = 30, FlatStyle = FlatStyle.Flat, Font = Theme.Caption, Margin = new Padding(0, 0, 8, 0) };
         bPickNone.FlatAppearance.BorderSize = 0; bPickNone.BackColor = Theme.CardBg; bPickNone.ForeColor = Theme.Accent;
         bPickNone.Click += (_, _) => SetAllDocs(false);
-        var lblPick = Ui.Caption("вибери джерело → «Оглянути» → познач документи", 516, 12, 460);
-        docsBar.Controls.Add(_btnPreview); docsBar.Controls.Add(_btnFetchPicked);
+        var lblPick = Ui.Caption("вибери джерело → «Оглянути» → познач документи", 0, 12, 460);
+        lblPick.Margin = new Padding(0, 12, 0, 0);
+        docsBar.Controls.Add(_btnPreview); docsBar.Controls.Add(_btnFetchPicked); docsBar.Controls.Add(_btnJudge);
         docsBar.Controls.Add(bPickAll); docsBar.Controls.Add(bPickNone); docsBar.Controls.Add(lblPick);
         _lblDocsTitle = Ui.Caption("Документи — усе", 0, 0, 600);
         _lblDocsTitle.Dock = DockStyle.Top;
@@ -346,6 +354,7 @@ internal sealed class MainForm : ThemedForm
         StyleSeg(_segSources, index == 0);
         StyleSeg(_segTopics, index == 1);
         StyleSeg(_segDocs, index == 2);
+        if (index == 2) { Ui.FillLastColumn(_docs, 300); Ui.FillLastColumn(_list, 220); Ui.FillLastColumn(_topics, 220); }
     }
 
     // Жива стрічка: «знайдено» приходить одразу після розбору списку, «завантажено» — по факту.
@@ -504,6 +513,7 @@ internal sealed class MainForm : ThemedForm
                 _docs.Items.Add(it);
             }
             _docs.EndUpdate();
+            Ui.FillLastColumn(_docs, 300);
             _lblDocsTitle.Text = "Огляд — " + s.Name + ": " + _docs.Items.Count + " документів"
                 + (already > 0 ? " · уже в бібліотеці " + already : "")
                 + (skippedOld > 0 ? " · відсіяно старих " + skippedOld : "");
@@ -571,6 +581,50 @@ internal sealed class MainForm : ThemedForm
             _running = false; _btnPreview.Enabled = true; _btnFetchPicked.Enabled = true;
         }
     }
+
+    // Судження моделі: тип / тема / мова для документів, де їх ще немає. Пишемо в каталог.
+    private async Task JudgeLibraryAsync()
+    {
+        var cfg = AppSettings.Load();
+        if (!Judge.Ready) { Ui.Msg("Немає ключа OpenRouter — впиши його в Параметрах → «Ключі й доступи».", Ui.Name, MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
+        if (string.IsNullOrWhiteSpace(cfg.Model)) { Ui.Msg("У Параметрах не вибрана модель для суджень.", Ui.Name, MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
+        if (_running) { Ui.Msg("Спочатку дочекайся кінця поточного збору.", Ui.Name, MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
+
+        var root = _txtOut.Text.Trim();
+        if (root.Length == 0) { Ui.Msg("Вкажи теку бібліотеки.", Ui.Name, MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
+
+        using var store = new Catalog(root);
+        var targets = store.All().Where(d => d.Type == "other" || string.IsNullOrWhiteSpace(d.Topic)).ToList();
+        if (targets.Count == 0) { Ui.Msg("Усі документи вже мають тип і тему.", Ui.Name, MessageBoxButtons.OK, MessageBoxIcon.Information); return; }
+
+        _running = true; _btnJudge.Enabled = false; _cts = new CancellationTokenSource();
+        _prog.Minimum = 0; _prog.Maximum = targets.Count; _prog.Value = 0;
+        Log("Судження моделлю " + cfg.Model + ": " + targets.Count + " документів");
+        int done = 0, changed = 0;
+        try
+        {
+            foreach (var d in targets)
+            {
+                _cts.Token.ThrowIfCancellationRequested();
+                var j = await Judge.ClassifyAsync(cfg.Model, string.IsNullOrWhiteSpace(d.Title) ? Path.GetFileNameWithoutExtension(d.Path) : d.Title, d.Path, _cts.Token);
+                done++; _prog.Value = Math.Min(done, _prog.Maximum);
+                if (j == null) { Log("  ? " + ShortTitle(d.Title) + " — модель не відповіла"); continue; }
+                d.Type = j.Type;
+                d.Topic = j.Topic == "none" ? "" : j.Topic;
+                d.Lang = j.Lang;
+                store.Add(d);
+                changed++;
+                Log("  ✓ " + ShortTitle(d.Title) + " → " + j.Type + " / " + (d.Topic.Length == 0 ? "—" : d.Topic) + " / " + j.Lang);
+            }
+            Ui.Msg("Суджень застосовано: " + changed + " із " + targets.Count, Ui.Name, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            _lblState.Text = CountCollection();
+        }
+        catch (OperationCanceledException) { Log("Судження зупинено."); }
+        catch (Exception ex) { Ui.Msg("Помилка судження: " + ex.Message, Ui.Name, MessageBoxButtons.OK, MessageBoxIcon.Error); }
+        finally { _running = false; _btnJudge.Enabled = true; _prog.Value = 0; }
+    }
+
+    private static string ShortTitle(string s) => s.Length <= 46 ? s : s[..46] + "…";
 
     private void OpenSettings()
     {

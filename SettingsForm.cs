@@ -12,6 +12,8 @@ internal sealed class SettingsForm : ThemedForm
     private TextBox _txtOut = null!, _txtKey = null!;
     private TextBox _txtSince = null!;
     private ComboBox _theme = null!;
+    private ComboBox _cbModel = null!;
+    private Label _lblModels = null!;
     private Label _lblVersion = null!;
 
     private const int FormW = 620;
@@ -133,7 +135,22 @@ internal sealed class SettingsForm : ThemedForm
         Ui.StyleInput(_txtKey);
         card3.Controls.Add(_txtKey);
         card3.Controls.Add(Ui.Caption("Порожнє поле = ключ видалено. Модельні судження без ключа не працюють, решта — працює.", Pad, 64, CardW - 2 * Pad));
-        FinishCard(card3, 92);
+
+        AddDivider(card3, 88);
+        card3.Controls.Add(Ui.Body("Модель:", Pad, 98, 90));
+        _cbModel = new ThemedCombo { Left = Pad + 96, Top = 95, Width = CardW - 2 * Pad - 96 - 150, Font = Theme.Body };
+        card3.Controls.Add(_cbModel);
+        var bModels = new Button { Text = "Оновити список", Left = CardW - Pad - 140, Top = 92, Width = 140 };
+        Ui.StyleSecondary(bModels);
+        bModels.Click += async (_, _) => await LoadModelsAsync();
+        card3.Controls.Add(bModels);
+        var bCheckKey = new Button { Text = "Перевірити ключ", Left = Pad, Top = 132, Width = 160 };
+        Ui.StyleSecondary(bCheckKey);
+        bCheckKey.Click += async (_, _) => await CheckKeyAsync();
+        card3.Controls.Add(bCheckKey);
+        _lblModels = Ui.Caption("", Pad + 170, 138, CardW - 2 * Pad - 170);
+        card3.Controls.Add(_lblModels);
+        FinishCard(card3, 166);
         y += card3.Height + 18;
 
         // ---- Про програму ----
@@ -173,6 +190,44 @@ internal sealed class SettingsForm : ThemedForm
     private static void AddDivider(Card c, int y) =>
         c.Controls.Add(new Panel { Left = Pad, Top = y, Width = CardW - 2 * Pad, Height = 1, BackColor = Theme.Divider });
 
+    private async Task LoadModelsAsync()
+    {
+        if (!Judge.Ready) { Ui.Msg("Спершу впиши ключ OpenRouter і збережи.", Ui.Name, MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
+        _lblModels.Text = "тягну список…";
+        try
+        {
+            var list = await Judge.ModelsAsync(default);
+            var keep = _cbModel.Text;
+            _cbModel.Items.Clear();
+            foreach (var m in list) _cbModel.Items.Add(m);
+            _lblModels.Text = "моделей: " + list.Count;
+            if (!string.IsNullOrWhiteSpace(keep) && list.Contains(keep)) _cbModel.SelectedItem = keep;
+            else if (!string.IsNullOrWhiteSpace(_cfg.Model) && list.Contains(_cfg.Model)) _cbModel.SelectedItem = _cfg.Model;
+        }
+        catch (Exception ex)
+        {
+            _lblModels.Text = "";
+            Ui.Msg("Не вдалося отримати список моделей: " + ex.Message, Ui.Name, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    private async Task CheckKeyAsync()
+    {
+        Secrets.Set("openrouter.key", _txtKey.Text.Trim());
+        _cfg.Model = (_cbModel.SelectedItem?.ToString() ?? _cbModel.Text).Trim();
+        if (!Judge.Ready) { Ui.Msg("Ключ порожній.", Ui.Name, MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
+        try
+        {
+            var models = await Judge.ModelsAsync(default);
+            Ui.Msg("Ключ працює. Доступних моделей: " + models.Count, Ui.Name, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            await LoadModelsAsync();
+        }
+        catch (Exception ex)
+        {
+            Ui.Msg("Ключ не приймається: " + ex.Message, Ui.Name, MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
     private void BrowseFolder()
     {
         using var dlg = new FolderBrowserDialog { Description = "Куди збирати документи", UseDescriptionForTitle = true };
@@ -187,6 +242,7 @@ internal sealed class SettingsForm : ThemedForm
         _txtSince.Text = Math.Clamp(_cfg.SinceYear, 1990, 2035).ToString();
         _cUpdates.Checked = _cfg.CheckUpdatesOnStart;
         _txtKey.Text = Secrets.Get("openrouter.key") ?? "";
+        if (!string.IsNullOrWhiteSpace(_cfg.Model)) { _cbModel.Items.Add(_cfg.Model); _cbModel.SelectedItem = _cfg.Model; }
         _lblVersion.Text = Program.Version + " · канал: " + (Updater.IsConfigured ? "підключено" : "не налаштовано");
     }
 

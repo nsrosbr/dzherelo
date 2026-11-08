@@ -12,6 +12,9 @@ public sealed class AppSettings
     public string UiTheme { get; set; } = "auto";
     public bool CheckUpdatesOnStart { get; set; } = true;
 
+    // Модель для суджень (тип/тема/мова). Порожньо — судження вимкнені.
+    public string Model { get; set; } = "";
+
     // Ключ OpenRouter і логіни проксі живуть у DPAPI (Secrets), а не в settings.json (§18, SPEC v0.1 §44).
     // [JsonIgnore] + читання/запис через Secrets — ключ ніколи не потрапляє у серіалізовані налаштування.
     [JsonIgnore]

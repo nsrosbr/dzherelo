@@ -71,7 +71,7 @@ internal static class Program
         if (args.Length > 0 && (args[0].StartsWith("--") || args[0].StartsWith("/")))
         {
             string[] known = { "--setup", "--install", "--uninstall", "--selftest", "--collect", "--list",
-                               "--relayout", "--probe", "--reindex", "--revert-adapter", "--topics", "--canon", "--help", "-h", "/?", "--set-secret", "--get-secret-check", "--secret-b64", "--update", "--check", "--force", "--about", "--preview" };
+                               "--relayout", "--probe", "--reindex", "--revert-adapter", "--topics", "--canon", "--help", "-h", "/?", "--set-secret", "--get-secret-check", "--secret-b64", "--update", "--check", "--force", "--about", "--preview", "--models", "--judge", "--model" };
             if (!known.Contains(args[0], StringComparer.OrdinalIgnoreCase))
             {
                 AttachConsole(-1);
@@ -129,6 +129,47 @@ internal static class Program
             Console.WriteLine(Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(v)));
             return 0;
         }
+        if (args.Any(a => a.Equals("--judge", StringComparison.OrdinalIgnoreCase)))
+        {
+            var cfg = AppSettings.Load();
+            var model = args.IndexOf("--model") is var mi and >= 0 && mi + 1 < args.Length ? args[mi + 1] : cfg.Model;
+            if (!Judge.Ready) { Console.WriteLine("немає ключа OpenRouter"); return 2; }
+            if (string.IsNullOrWhiteSpace(model)) { Console.WriteLine("не вибрана модель: --model <id> або Параметри"); return 2; }
+
+            var ji = Array.FindIndex(args, a => a.Equals("--judge", StringComparison.OrdinalIgnoreCase));
+            var limit = ji >= 0 && ji + 1 < args.Length && int.TryParse(args[ji + 1], out var n) ? n : 3;
+
+            var jroot = App.Root(null);
+            using var jstore = new Catalog(jroot);
+            var targets = jstore.All().Where(d => d.Type == "other" || string.IsNullOrWhiteSpace(d.Topic)).Take(limit).ToList();
+            Console.WriteLine("модель: " + model + " | кандидатів: " + targets.Count);
+            int ok = 0;
+            foreach (var d in targets)
+            {
+                var j = Judge.ClassifyAsync(model, string.IsNullOrWhiteSpace(d.Title) ? Path.GetFileNameWithoutExtension(d.Path) : d.Title, d.Path, default).GetAwaiter().GetResult();
+                if (j == null) { Console.WriteLine("  ? " + d.Title); continue; }
+                d.Type = j.Type; d.Topic = j.Topic == "none" ? "" : j.Topic; d.Lang = j.Lang;
+                jstore.Add(d); ok++;
+                Console.WriteLine($"  ✓ {d.Title} → {j.Type} / {(d.Topic.Length == 0 ? "—" : d.Topic)} / {j.Lang} (впевненість {j.Confidence:0.00})");
+            }
+            Console.WriteLine("застосовано: " + ok);
+            return 0;
+        }
+
+        if (args.Any(a => a.Equals("--models", StringComparison.OrdinalIgnoreCase)))
+        {
+            if (!Judge.Ready) { Console.WriteLine("ключа OpenRouter немає — Параметри → «Ключі й доступи»"); return 2; }
+            var mi = Array.FindIndex(args, a => a.Equals("--models", StringComparison.OrdinalIgnoreCase));
+            var filter = mi >= 0 && mi + 1 < args.Length && !args[mi + 1].StartsWith("--") ? args[mi + 1] : "";
+            var list = Judge.ModelsAsync(default).GetAwaiter().GetResult();
+            var shown = string.IsNullOrWhiteSpace(filter)
+                ? list.Take(15).ToList()
+                : list.Where(m => m.Contains(filter, StringComparison.OrdinalIgnoreCase)).Take(200).ToList();
+            Console.WriteLine("моделей доступно: " + list.Count + (filter.Length > 0 ? " | збігів «" + filter + "»: " + shown.Count : ""));
+            foreach (var m in shown) Console.WriteLine("  " + m);
+            return 0;
+        }
+
         // Огляд джерела без завантаження — те саме, що кнопка «Оглянути джерело» у вікні.
         if (args.Any(a => a.Equals("--preview", StringComparison.OrdinalIgnoreCase)))
         {
