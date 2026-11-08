@@ -61,7 +61,7 @@ internal static class Program
         if (args.Length > 0 && (args[0].StartsWith("--") || args[0].StartsWith("/")))
         {
             string[] known = { "--setup", "--install", "--uninstall", "--selftest", "--collect", "--list",
-                               "--relayout", "--probe", "--reindex", "--revert-adapter", "--topics", "--canon", "--help", "-h", "/?" };
+                               "--relayout", "--probe", "--reindex", "--revert-adapter", "--topics", "--canon", "--help", "-h", "/?", "--set-secret", "--get-secret-check" };
             if (!known.Contains(args[0], StringComparer.OrdinalIgnoreCase))
             {
                 AttachConsole(-1);
@@ -69,6 +69,29 @@ internal static class Program
                 Console.WriteLine(Usage);
                 return 2;
             }
+        }
+        if (args.Any(a => a.Equals("--set-secret", StringComparison.OrdinalIgnoreCase)))
+        {
+            AttachConsole(-1);
+            var i = Array.FindIndex(args, a => a.Equals("--set-secret", StringComparison.OrdinalIgnoreCase));
+            var name = i + 1 < args.Length ? args[i + 1] : "";
+            var value = Console.In.ReadToEnd().Trim();     // значення зі stdin: не потрапляє в історію команд
+            if (string.IsNullOrWhiteSpace(name) || value.Length == 0)
+            {
+                Console.WriteLine("Вжиток: echo <значення> | Dzherelo.exe --set-secret <імʼя>");
+                return 2;
+            }
+            Secrets.Set(name, value);
+            Console.WriteLine($"{name}: збережено в DPAPI (CurrentUser), {value.Length} символів");
+            return 0;
+        }
+        if (args.Any(a => a.Equals("--get-secret-check", StringComparison.OrdinalIgnoreCase)))
+        {
+            AttachConsole(-1);
+            var name = args.Length > 1 ? args[1] : "";
+            var v = Secrets.Get(name);
+            Console.WriteLine(v is null ? $"{name}: немає" : $"{name}: є, {v.Length} символів");
+            return 0;
         }
         if (args.Any(a => a.Equals("--selftest", StringComparison.OrdinalIgnoreCase)))
         {
