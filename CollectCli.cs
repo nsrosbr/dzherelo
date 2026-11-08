@@ -261,14 +261,25 @@ public static class CollectCli
     // --canon <вхід.html> [--out вихід.pdf]: сторінку без PDF конвертуємо в аркуш канону.
     private static async Task<int> CanonCliAsync(string input, string? outArg)
     {
+        if (input.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+        {
+            var titleU = input.Split('/').LastOrDefault(s => s.Length > 4) ?? "page";
+            try
+            {
+                await CanonPdf.RenderUrlToPdfAsync(input, titleU, "Dzherelo", "2026-11-08",
+                                                   Path.GetFullPath(outArg ?? (titleU + ".pdf")));
+                Console.WriteLine("Канон-PDF: " + Path.GetFullPath(outArg ?? (titleU + ".pdf")));
+                return 0;
+            }
+            catch (Exception ex) { Console.WriteLine("ЗБІЙ: " + ex.Message); return 1; }
+        }
         if (!File.Exists(input)) { Console.WriteLine("Немає файлу: " + input); return 2; }
         var html = await File.ReadAllTextAsync(input);
         var title = Path.GetFileNameWithoutExtension(input).Replace(".source", "");
         var outPath = outArg ?? Path.Combine(Path.GetDirectoryName(Path.GetFullPath(input))!, title + ".pdf");
         try
         {
-            var doc = CanonPdf.Document(title, "Dzherelo", "", "2026-11-07", CanonPdf.ExtractText(html));
-            await CanonPdf.RenderToPdfAsync(doc, outPath);
+            await CanonPdf.RenderPageToPdfAsync(html, title, "Dzherelo", "2026-11-07", outPath);
         }
         catch (Exception ex)
         {

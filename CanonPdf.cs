@@ -136,21 +136,43 @@ strong {{ color: #0F1724; }}
         return RenderCoreAsync(html, outPath, ct);
     }
 
-    private static Task RenderCoreAsync(string html, string outPath, CancellationToken ct)
+    private static Task<string> RenderCoreAsync(string html, string outPath, CancellationToken ct, bool textOnly = false, string? url = null)
     {
-        var tcs = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var thread = new Thread(() => RenderLoop(html, outPath, tcs))
-        {
-            IsBackground = true,
-            Name = "canon-pdf-render",
-        };
+        var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var thread = new Thread(() => RenderLoop(html, outPath, tcs, textOnly, url));
         thread.SetApartmentState(ApartmentState.STA);
+        thread.IsBackground = true;
         thread.Start();
-        ct.Register(() => tcs.TrySetCanceled(ct));
         return tcs.Task;
     }
 
-    private static void RenderLoop(string html, string outPath, TaskCompletionSource<int> tcs)
+    /// <summary>Текст саме відрендереної сторінки: тіло статті, яке приходить JS-ом, сирий HTML не містить.</summary>
+    public static Task<string> ExtractDomTextAsync(string rawHtml, CancellationToken ct = default) =>
+        RenderCoreAsync(rawHtml, null, ct, textOnly: true);
+
+    /// <summary>Текст живої сторінки за адресою: скрипти й стилі вантажаться, бо йдемо на саму адресу.</summary>
+    public static Task<string> ExtractDomTextFromUrlAsync(string url, CancellationToken ct = default) =>
+        RenderCoreAsync("", null, ct, textOnly: true, url: url);
+
+    /// <summary>URL → PDF за каноном.</summary>
+    public static async Task RenderUrlToPdfAsync(string url, string title, string unit, string date,
+                                                 string outPath, CancellationToken ct = default)
+    {
+        var text = await ExtractDomTextFromUrlAsync(url, ct);
+        var doc = Document(title, unit, "", date, text);
+        _ = await RenderCoreAsync(doc, Path.GetFullPath(outPath), ct);
+    }
+
+    /// <summary>Сторінка з мережі → PDF за каноном: текст із DOM, а не з розмітки.</summary>
+    public static async Task RenderPageToPdfAsync(string rawHtml, string title, string unit, string date,
+                                                  string outPath, CancellationToken ct = default)
+    {
+        var text = await ExtractDomTextAsync(rawHtml, ct);
+        var doc = Document(title, unit, "", date, text);
+        _ = await RenderCoreAsync(doc, Path.GetFullPath(outPath), ct);
+    }
+
+    private static void RenderLoop(string html, string outPath, TaskCompletionSource<string> tcs, bool textOnly, string? url)
     {
         try
         {
@@ -176,16 +198,25 @@ strong {{ color: #0F1724; }}
                     await webView.EnsureCoreWebView2Async();
                     var core = webView.CoreWebView2;
                     core.Settings.AreDefaultScriptDialogsEnabled = false;
-                    core.Settings.IsScriptEnabled = false;
+                    core.Settings.IsScriptEnabled = textOnly;   // JS потрібен лише для читання живої сторінки; наш документ друкуємо без нього
                     core.SetVirtualHostNameToFolderMapping(Host, fontsDir, CoreWebView2HostResourceAccessKind.Allow);
-                    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outPath))!);
+                    if (!string.IsNullOrEmpty(outPath))
+                        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outPath))!);
                     var nav = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
                     core.NavigationCompleted += (_, e) => nav.TrySetResult(e.IsSuccess);
-                    core.NavigateToString(html);
+                    if (url != null) core.Navigate(url); else core.NavigateToString(html);
                     await nav.Task;
-                    await Task.Delay(250);   // дати шрифтам (віртуальний host) завантажитись до друку
-                    _ = await core.PrintToPdfAsync(outPath);
-                    tcs.TrySetResult(0);
+                    await Task.Delay(textOnly ? 5000 : 250);   // JS-сторінки: дати гідрації завершитись перед зняттям innerText
+                    if (textOnly)
+                    {
+                        var txt = await core.ExecuteScriptAsync("document.body.innerText");
+                        tcs.TrySetResult(System.Text.Json.JsonSerializer.Deserialize<string>(txt) ?? "");
+                    }
+                    else
+                    {
+                        _ = await core.PrintToPdfAsync(outPath);
+                        tcs.TrySetResult("");
+                    }
                 }
                 catch (Exception ex) { tcs.TrySetException(new Exception(ex.ToString())); }
                 finally { form.Close(); }

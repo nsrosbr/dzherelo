@@ -61,7 +61,7 @@ internal static class Program
         if (args.Length > 0 && (args[0].StartsWith("--") || args[0].StartsWith("/")))
         {
             string[] known = { "--setup", "--install", "--uninstall", "--selftest", "--collect", "--list",
-                               "--relayout", "--probe", "--reindex", "--revert-adapter", "--topics", "--canon", "--help", "-h", "/?", "--set-secret", "--get-secret-check" };
+                               "--relayout", "--probe", "--reindex", "--revert-adapter", "--topics", "--canon", "--help", "-h", "/?", "--set-secret", "--get-secret-check", "--secret-b64", "--update", "--check", "--force" };
             if (!known.Contains(args[0], StringComparer.OrdinalIgnoreCase))
             {
                 AttachConsole(-1);
@@ -91,6 +91,32 @@ internal static class Program
             var name = args.Length > 1 ? args[1] : "";
             var v = Secrets.Get(name);
             Console.WriteLine(v is null ? $"{name}: немає" : $"{name}: є, {v.Length} символів");
+            return 0;
+        }
+        if (args.Any(a => a.Equals("--update", StringComparison.OrdinalIgnoreCase)))
+        {
+            AttachConsole(-1);
+            var check = args.Any(a => a.Equals("--check", StringComparison.OrdinalIgnoreCase));
+            try
+            {
+                var m = Updater.FetchManifestAsync().GetAwaiter().GetResult();
+                Console.WriteLine($"поточна: {Updater.Current} | у каналі: {m.Version}");
+                var force = args.Any(a => a.Equals("--force", StringComparison.OrdinalIgnoreCase));
+                if (!Updater.IsNewer(m) && !force) { Console.WriteLine("оновлення не потрібне"); return 0; }
+                Console.WriteLine($"є новіша: {m.Version} — {m.Notes}");
+                if (check) return 0;
+                Console.WriteLine(Updater.ApplyAsync(m).GetAwaiter().GetResult());
+                return 0;
+            }
+            catch (Exception ex) { Console.WriteLine("ЗБІЙ оновлення: " + ex.Message); return 1; }
+        }
+        if (args.Any(a => a.Equals("--secret-b64", StringComparison.OrdinalIgnoreCase)))
+        {
+            AttachConsole(-1);
+            var name = args.Length > 1 ? args[1] : "";
+            var v = Secrets.Get(name);
+            if (v is null) return 2;
+            Console.WriteLine(Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(v)));
             return 0;
         }
         if (args.Any(a => a.Equals("--selftest", StringComparison.OrdinalIgnoreCase)))

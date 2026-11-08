@@ -271,8 +271,20 @@ public sealed class Harvester
 
         try
         {
-            var doc = CanonPdf.Document(title, s.Name, topic, date, CanonPdf.ExtractText(html));
-            await CanonPdf.RenderToPdfAsync(doc, pdfPath, ct);
+            // спершу — сама адреса: JS-сторінки (RUSI тощо) віддають тіло статті лише після гідрації;
+            // якщо не вийшло — сирий HTML як запасний варіант
+            var rendered = false;
+            if (!string.IsNullOrWhiteSpace(d.Url) && d.Url.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+            {
+                try { await CanonPdf.RenderUrlToPdfAsync(d.Url, title, s.Name, date, pdfPath, ct); rendered = true; }
+                catch (OperationCanceledException) { throw; }
+                catch { /* падаємо на сирий HTML нижче */ }
+            }
+            if (!rendered)
+            {
+                var doc = CanonPdf.Document(title, s.Name, topic, date, CanonPdf.ExtractText(html));
+                await CanonPdf.RenderToPdfAsync(doc, pdfPath, ct);
+            }
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex)
