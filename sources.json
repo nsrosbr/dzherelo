@@ -882,7 +882,7 @@
       "name": "НУОУ: інформ. технології",
       "section": "Україномовні",
       "kind": "oai",
-      "url": "https://sit.nuou.org.ua/index.php/index/oai",
+      "url": "https://sit.nuou.org.ua/oai",
       "lang": "uk",
       "rps": 1,
       "depth": 0,
@@ -892,7 +892,7 @@
       "slug": "sit",
       "taxonomy": "=articles",
       "pages": 3,
-      "note": "OAI-репозиторій має 305 345 записів (~36 с/сторінка). Беремо лише змінені з 2022 і 3 сторінки за прогін; далі — курсор",
+      "note": "OJS 3.2.1.2, власна OAI /oai (не index/index — той вів на journals.uran.ua). Сайт відкритий, без 2FA",
       "from": "2022-01-01"
     },
     {
