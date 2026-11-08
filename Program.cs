@@ -72,7 +72,7 @@ internal static class Program
         }
         if (args.Any(a => a.Equals("--set-secret", StringComparison.OrdinalIgnoreCase)))
         {
-            AttachConsole(-1);
+            // без AttachConsole: вивід має йти в pipe, інакше git-credential helper нічого не читає
             var i = Array.FindIndex(args, a => a.Equals("--set-secret", StringComparison.OrdinalIgnoreCase));
             var name = i + 1 < args.Length ? args[i + 1] : "";
             var value = Console.In.ReadToEnd().Trim();     // значення зі stdin: не потрапляє в історію команд
@@ -87,7 +87,7 @@ internal static class Program
         }
         if (args.Any(a => a.Equals("--get-secret-check", StringComparison.OrdinalIgnoreCase)))
         {
-            AttachConsole(-1);
+            // без AttachConsole: вивід має йти в pipe, інакше git-credential helper нічого не читає
             var name = args.Length > 1 ? args[1] : "";
             var v = Secrets.Get(name);
             Console.WriteLine(v is null ? $"{name}: немає" : $"{name}: є, {v.Length} символів");
@@ -112,7 +112,7 @@ internal static class Program
         }
         if (args.Any(a => a.Equals("--secret-b64", StringComparison.OrdinalIgnoreCase)))
         {
-            AttachConsole(-1);
+            // без AttachConsole: вивід має йти в pipe, інакше git-credential helper нічого не читає
             var name = args.Length > 1 ? args[1] : "";
             var v = Secrets.Get(name);
             if (v is null) return 2;
