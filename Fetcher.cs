@@ -85,7 +85,7 @@ public sealed class Fetcher : IDisposable
             UseCookies = true,
             CookieContainer = _cookies,
         };
-        _http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(45) };
+        _http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(120) };
         handler.ConnectCallback = async (ctx, ct) =>
         {
             var ip = await ResolveAsync(ctx.DnsEndPoint.Host, ct);
@@ -201,6 +201,22 @@ public sealed class Fetcher : IDisposable
 
     // Один раз на хост: відкрити сторінку в WebView2, дочекатись, поки Cloudflare пропустить,
     // і покласти cf_clearance у нашу куку-банку. Далі звичайні запити проходять.
+
+    /// <summary>Хост не відкриває TCP (не 403, а «немає з ким говорити»). Тоді — копія з публічного архіву.</summary>
+    public static string WaybackUrl(string url) => "https://web.archive.org/web/2id_/" + url;
+
+    private async Task<string?> WaybackAsync(string url, CancellationToken ct)
+    {
+        try
+        {
+            using var resp = await _http.GetAsync(WaybackUrl(url), ct);
+            if (!resp.IsSuccessStatusCode) return null;
+            var text = await resp.Content.ReadAsStringAsync(ct);
+            return string.IsNullOrWhiteSpace(text) ? null : text;
+        }
+        catch { return null; }
+    }
+
     private async Task<bool> TryBrowserAsync(string url, CancellationToken ct)
     {
         _browserSolved.Add(HostOf(url));
@@ -372,6 +388,26 @@ public sealed class Fetcher : IDisposable
         {
             resp = await SendAsync(url, rps, ct);
         }
+        catch (NetworkDownException)
+        {
+            // Сайт мовчить довше за таймаут: тягнемо браузером (він чекає довше й проходить 403)
+            try
+            {
+                var raw = await BrowserSolve.FetchRawAsync(url, ct);
+                if (raw != null && raw.Length > 20 && !BrowserSolve.IsChallenge(raw)) return raw;
+            }
+            catch { }
+            var (okCurl, bodyCurl) = await CurlAsync(url, ct);
+            if (okCurl) return bodyCurl;
+
+            var archived = await WaybackAsync(url, ct);
+            if (archived != null)
+            {
+                Console.WriteLine("  ↻ хоста немає — узято копію з архіву: " + url);
+                return archived;
+            }
+            throw;
+        }
         catch (BlockedException)
         {
             // Один візит браузера: і cf_clearance, і сам html (другий захід сайт ріже 403)
@@ -427,7 +463,7 @@ public sealed class Fetcher : IDisposable
             try
             {
                 var raw = await BrowserSolve.FetchRawAsync(url, ct);
-                if (!string.IsNullOrWhiteSpace(raw)) return raw;
+                if (raw != null && raw.Length > 20) return raw;
             }
             catch { }
         }
