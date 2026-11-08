@@ -503,6 +503,13 @@ namespace Dzherelo
             case Form f:
                 f.BackColor = Theme.PageBg; f.ForeColor = Theme.TextPrimary;
                 break;
+            case LinkLabel ll:
+                ll.ForeColor = Theme.TextPrimary;
+                ll.LinkColor = Theme.Accent;
+                ll.ActiveLinkColor = Theme.AccentPressed;
+                ll.VisitedLinkColor = Theme.Accent;
+                ll.BackColor = Color.Transparent;
+                break;
             case Label lbl:
                 lbl.ForeColor = (lbl.Tag as string) == "muted" ? Theme.TextSecondary : Theme.TextPrimary;
                 lbl.BackColor = Color.Transparent;

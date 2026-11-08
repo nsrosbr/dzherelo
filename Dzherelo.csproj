@@ -31,4 +31,7 @@
     <None Update="sources.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="assets\dzherelo-1024.png" LogicalName="dzherelo_mark" />
+  </ItemGroup>
 </Project>

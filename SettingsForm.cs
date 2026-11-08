@@ -144,10 +144,14 @@ internal sealed class SettingsForm : ThemedForm
         Ui.StyleSecondary(bOpenData);
         bOpenData.Click += (_, _) => { try { Process.Start("explorer.exe", DataDir); } catch { } };
         card4.Controls.Add(bOpenData);
-        var bReset = new Button { Text = "Скинути адаптери", Left = Pad + 210, Top = 46, Width = 190 };
+        var bReset = new Button { Text = "Скинути адаптери", Left = Pad + 210, Top = 46, Width = 180 };
         Ui.StyleSecondary(bReset);
         bReset.Click += (_, _) => ResetAdapters();
         card4.Controls.Add(bReset);
+        var bAbout = new Button { Text = "Про програму…", Left = Pad + 400, Top = 46, Width = 170 };
+        Ui.StyleSecondary(bAbout);
+        bAbout.Click += (_, _) => { using var about = new AboutForm(); about.ShowDialog(this); };
+        card4.Controls.Add(bAbout);
         FinishCard(card4, 92);
         y += card4.Height + 8;
     }
