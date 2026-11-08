@@ -202,6 +202,23 @@ public static class Setup
         }
 
         Console.WriteLine("ГОТОВО. Застосунок у " + targetExe);
+
+        // Подвійний клік по Setup.exe: консолі немає, тому без цього користувач бачить «тишу».
+        // Показуємо результат і відкриваємо застосунок, як робить нормальний інсталятор.
+        if (IsSetupExe())
+        {
+            try
+            {
+                System.Windows.Forms.MessageBox.Show(
+                    "Dzherelo 2.0.0 встановлено.\n\nТека: " + targetDir +
+                    "\nЯрлики: меню «Пуск» і робочий стіл.\n\nВідкрити застосунок?",
+                    "Dzherelo — встановлення завершено",
+                    System.Windows.Forms.MessageBoxButtons.YesNo,
+                    System.Windows.Forms.MessageBoxIcon.Information);
+                System.Diagnostics.Process.Start(targetExe);
+            }
+            catch { /* якщо GUI недоступний — вже є консольний вивід */ }
+        }
         return 0;
     }
 
