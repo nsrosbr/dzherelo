@@ -17,6 +17,7 @@ public sealed class SourceResult
     public int Duplicates { get; set; }
     public int Failed { get; set; }
     public int LoginGated { get; set; }
+    public int BlockedDocs { get; set; }
     public List<string> NewDocIds { get; } = new();
     public long Bytes { get; set; }
     public SourceStatus Status { get; set; } = SourceStatus.Ok;
@@ -183,6 +184,11 @@ public sealed class Harvester
 
                 r.Status = DecideStatus(r, stats);
                 if (r.LoginGated > 0 && r.New == 0) { r.Status = SourceStatus.Blocked; if (r.Note.Length == 0) r.Note = "PDF за логіном"; }
+                if (r.BlockedDocs > 0 && r.New == 0 && r.Html == 0)
+                {
+                    r.Status = SourceStatus.Blocked;
+                    if (r.Note.Length == 0) r.Note = $"усі документи відмовили (403), {r.BlockedDocs} шт.";
+                }
                 Log("  " + r.StatusText + ": нових " + r.New + ", html " + r.Html + ", дублів " + r.Duplicates
                     + ", пропущено " + r.Skipped + ", помилок " + r.Failed);
             }
@@ -366,8 +372,7 @@ public sealed class Harvester
             string html;
             try { html = await fetch.GetTextAsync(d.Url, s.Rps, ct); }
             catch (LoginRequiredException) { Gate(r, d.Url, "🔒 потрібен вхід", "PAYWALL"); return; }
-            catch (BlockedException ex) when (d.Crawled) { Gate(r, d.Url, "⛔ " + ex.Message, "BLOCKED"); return; }
-            catch (BlockedException) { throw; }
+            catch (BlockedException ex) { GateBlocked(r, d.Url, ex.Message); return; }
             catch (NetworkDownException) { throw; }
             catch (Exception ex)
             {
@@ -401,6 +406,7 @@ public sealed class Harvester
             try { saved = await DownloadAsync(pdf, dir, FileName(title, pdf, s.Name, dir), s, fetch, ct); }
             catch (LoginRequiredException) { Gate(r, pdf, "🔒 потрібен вхід", "PAYWALL"); return; }
             catch (NotFoundException ex) { Fail(r, pdf, ex.Message, "NOT_FOUND"); return; }
+            catch (BlockedException ex) { GateBlocked(r, pdf, ex.Message); return; }
             if (saved == null)
             {
                 Fail(r, pdf, "не PDF", "BAD_FORMAT");
@@ -414,6 +420,7 @@ public sealed class Harvester
             try { saved = await DownloadAsync(d.Url, dir, FileName(title, d.Url, s.Name, dir), s, fetch, ct); }
             catch (LoginRequiredException) { Gate(r, d.Url, "🔒 потрібен вхід", "PAYWALL"); return; }
             catch (NotFoundException ex) { Fail(r, d.Url, ex.Message, "NOT_FOUND"); return; }
+            catch (BlockedException ex) { GateBlocked(r, d.Url, ex.Message); return; }
             if (saved == null)
             {
                 Fail(r, d.Url, "не PDF");
@@ -544,6 +551,16 @@ public sealed class Harvester
         r.Failed++;
         if (r.Failures.Count < 5) r.Failures.Add(reason);
         Log("  ! " + Short(url) + " — " + reason);
+    }
+
+    // 403 від ОКРЕМОГО документа (часто чужий хост у посиланні) — це провал документа, не джерела.
+    private void GateBlocked(SourceResult r, string url, string reason)
+    {
+        Remember(url, r, "BLOCKED");
+        r.BlockedDocs++;
+        r.Failed++;
+        if (r.Failures.Count < 5) r.Failures.Add(reason);
+        Log("  ⛔ " + reason + " " + Short(url));
     }
 
     private void Gate(SourceResult r, string url, string reason, string? code = null)
