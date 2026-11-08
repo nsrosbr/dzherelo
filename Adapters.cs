@@ -43,8 +43,10 @@ public static class Adapters
         var next = !string.IsNullOrWhiteSpace(resumeToken)
             ? s.Url + sep + "verb=ListRecords&resumptionToken=" + Uri.EscapeDataString(resumeToken)
             : s.Url + sep + "verb=ListRecords&metadataPrefix=" + prefix
-                   + (string.IsNullOrWhiteSpace(s.Set) ? "" : "&set=" + Uri.EscapeDataString(s.Set!));
-        for (int page = 0; next != null && page < 400; page++)
+                   + (string.IsNullOrWhiteSpace(s.Set) ? "" : "&set=" + Uri.EscapeDataString(s.Set!))
+                   + (string.IsNullOrWhiteSpace(s.FromDate) ? "" : "&from=" + Uri.EscapeDataString(s.FromDate!));
+        var maxPages = s.Pages > 0 ? s.Pages : 400;
+        for (int page = 0; next != null && page < maxPages; page++)
         {
             var xml = await f.GetTextAsync(next, s.Rps, ct);
             if (stats.Expected < 0)
@@ -52,6 +54,9 @@ public static class Adapters
                 var sz = Regex.Match(xml, "completeListSize=\"(\\d+)\"").Groups[1].Value;
                 if (sz.Length > 0) stats.Expected = int.Parse(sz);
             }
+            var recCount = Regex.Matches(xml, @"<record[\s>]").Count;
+            if (Environment.GetEnvironmentVariable("DZ_DEBUG") == "1" || recCount > 0)
+                Console.WriteLine($"  · OAI сторінка {page + 1}: записів {recCount}" + (stats.Expected > 0 ? " із " + stats.Expected : ""));
             foreach (Match rec in Regex.Matches(xml, @"<record[\s>][\s\S]*?</record>"))
             {
                 var body = rec.Value;

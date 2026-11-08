@@ -890,7 +890,10 @@
       "keepHtml": false,
       "manual": false,
       "slug": "sit",
-      "taxonomy": "=articles"
+      "taxonomy": "=articles",
+      "pages": 3,
+      "note": "OAI-репозиторій має 305 345 записів (~36 с/сторінка). Беремо лише змінені з 2022 і 3 сторінки за прогін; далі — курсор",
+      "from": "2022-01-01"
     },
     {
       "id": "znp-nangu",

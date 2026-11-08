@@ -164,7 +164,9 @@ internal static class Program
             var target = args[fi + 1];
             var oi = Array.FindIndex(args, a => a.Equals("--out", StringComparison.OrdinalIgnoreCase));
             using var f = new Fetcher(Path.Combine(Path.GetTempPath(), "dzherelo-fetch"));
-            var body = f.GetTextAsync(target, 1, default).GetAwaiter().GetResult();
+            string body;
+            try { body = f.GetTextAsync(target, 1, default).GetAwaiter().GetResult(); }
+            catch (Exception ex) { Console.WriteLine("не вдалося: " + ex.GetType().Name + " — " + ex.Message); return 1; }
             Console.WriteLine("отримано: " + body.Length + " символів");
             if (oi >= 0 && oi + 1 < args.Length) { File.WriteAllText(args[oi + 1], body); Console.WriteLine("→ " + args[oi + 1]); }
             else Console.WriteLine(body.Length > 400 ? body[..400] : body);

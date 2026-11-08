@@ -145,9 +145,12 @@ public sealed class Harvester
                 var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var cd in catalogDocs) seen.Add(Catalog.Canonical(cd.Url));
                 var stats = new DiscoveryStats();
+                Log("  розбираю список: " + s.Url + " (" + s.Kind + ")");
+                using var listCts = CancellationTokenSource.CreateLinkedTokenSource(sct);
+                listCts.CancelAfter(TimeSpan.FromMinutes(3));   // сайт, що мовчить, не тримає прогін
                 if (s.Kind != "catalog")
                 {
-                    await foreach (var d in Adapters.DiscoverAsync(s, fetch, SinceYear, stats, _cursors, sct))
+                    await foreach (var d in Adapters.DiscoverAsync(s, fetch, SinceYear, stats, _cursors, listCts.Token))
                     {
                         if (!seen.Add(Catalog.Canonical(d.Url))) continue;
                         docs.Add(d);
@@ -202,6 +205,12 @@ public sealed class Harvester
                 r.Note = "зупинено користувачем";
                 r.Elapsed = sw.Elapsed;
                 throw;
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                r.Status = SourceStatus.Network;
+                r.Note = "сайт не віддав список за 3 хвилини";
+                Log("  ⚠ " + r.Note);
             }
             catch (OperationCanceledException)
             {

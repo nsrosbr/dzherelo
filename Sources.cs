@@ -36,6 +36,8 @@ public sealed class Source
     public int Pages { get; set; }
     // які дочірні мапи sitemap_index брати (regex по адресі мапи), напр. "post-sitemap"
     public string? MapsInclude { get; set; }
+    // OAI: from=YYYY-MM-DD — ріже 300-тисячні репозиторії до зміненого після цієї дати
+    public string? FromDate { get; set; }
     public bool KeepHtml { get; set; }
     public string Lang { get; set; } = "en";
     // honest flags: never report success for these

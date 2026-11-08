@@ -30,6 +30,9 @@ internal sealed class MainForm : ThemedForm
     private CheckBox _onlySel = null!;
     private Label _lblDocsCount = null!, _lblDocsTitle = null!;
     private Button _btnPreview = null!, _btnFetchPicked = null!, _btnJudge = null!;
+    private readonly System.Windows.Forms.Timer _tick = new() { Interval = 1000 };
+    private DateTime _opStarted;
+    private string _opTitle = "";
     private readonly List<(string T, string Src, string Url, string St, long Bytes)> _docRows = new();
     private const int DocRowsMax = 3000;
     private Label _lblSubtitle = null!;
@@ -480,9 +483,11 @@ internal sealed class MainForm : ThemedForm
         Directory.CreateDirectory(root);
 
         _running = true; _btnPreview.Enabled = false; _btnFetchPicked.Enabled = false;
+        _btnStop.Enabled = true;
         _cts = new CancellationTokenSource();
-        _lblDocsTitle.Text = "Огляд — " + s.Name + " … розбираю список";
+        _cts.CancelAfter(TimeSpan.FromSeconds(180));   // сайт, що мовчить, не має тримати нас вічно
         _docs.Items.Clear();
+        StartTicker("Огляд — " + s.Name + ": розбираю список");
         try
         {
             using var store = new Catalog(root);
@@ -519,14 +524,20 @@ internal sealed class MainForm : ThemedForm
                 + (skippedOld > 0 ? " · відсіяно старих " + skippedOld : "");
             _lblDocsCount.Text = _docs.Items.Count.ToString("N0") + " документів";
         }
+        catch (OperationCanceledException)
+        {
+            Log("Огляд перервано: сайт не віддав список за 180 с — " + s.Url);
+            Ui.Msg("Огляд перервано: джерело не відповіло за 3 хвилини.\nЦе не помилка застосунку — сайт мовчить.",
+                Ui.Name, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
         catch (Exception ex)
         {
             Ui.Msg("Огляд не вдався: " + ex.Message, Ui.Name, MessageBoxButtons.OK, MessageBoxIcon.Error);
-            _lblDocsTitle.Text = "Документи — " + s.Name;
         }
         finally
         {
-            _running = false; _btnPreview.Enabled = true; _btnFetchPicked.Enabled = true;
+            StopTicker();
+            _running = false; _btnPreview.Enabled = true; _btnFetchPicked.Enabled = true; _btnStop.Enabled = false;
         }
     }
 
@@ -622,6 +633,30 @@ internal sealed class MainForm : ThemedForm
         catch (OperationCanceledException) { Log("Судження зупинено."); }
         catch (Exception ex) { Ui.Msg("Помилка судження: " + ex.Message, Ui.Name, MessageBoxButtons.OK, MessageBoxIcon.Error); }
         finally { _running = false; _btnJudge.Enabled = true; _prog.Value = 0; }
+    }
+
+    // Показує, скільки вже триває операція — щоб «висіння» було видно, а не вгадувалось.
+    private void StartTicker(string title)
+    {
+        _opTitle = title;
+        _opStarted = DateTime.Now;
+        _lblDocsTitle.Text = title + " · 0 с";
+        _tick.Stop();
+        _tick.Tick -= OnTick;
+        _tick.Tick += OnTick;
+        _tick.Start();
+    }
+
+    private void OnTick(object? sender, EventArgs e)
+    {
+        var sec = (int)(DateTime.Now - _opStarted).TotalSeconds;
+        _lblDocsTitle.Text = _opTitle + " · " + sec + " с" + (sec >= 60 ? " — сайт мовчить, можна натиснути «Стоп»" : "");
+    }
+
+    private void StopTicker()
+    {
+        _tick.Stop();
+        _tick.Tick -= OnTick;
     }
 
     private static string ShortTitle(string s) => s.Length <= 46 ? s : s[..46] + "…";
