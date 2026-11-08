@@ -38,6 +38,8 @@ public sealed class Fetcher : IDisposable
     private readonly Dictionary<string, SemaphoreSlim> _gates = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, long> _lastHit = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _lock = new();
+    private readonly CookieContainer _cookies = new();
+    private readonly HashSet<string> _browserSolved = new(StringComparer.OrdinalIgnoreCase);
 
     private static HttpClient CreateDoh()
     {
@@ -81,7 +83,7 @@ public sealed class Fetcher : IDisposable
             // Digital Commons (JCWD, USAWC Press) 403s a PDF until the visitor has loaded
             // a page on the same host and picked up its session cookie.
             UseCookies = true,
-            CookieContainer = new CookieContainer(),
+            CookieContainer = _cookies,
         };
         _http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(45) };
         handler.ConnectCallback = async (ctx, ct) =>
@@ -197,6 +199,43 @@ public sealed class Fetcher : IDisposable
         return await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
     }
 
+    // Один раз на хост: відкрити сторінку в WebView2, дочекатись, поки Cloudflare пропустить,
+    // і покласти cf_clearance у нашу куку-банку. Далі звичайні запити проходять.
+    private async Task<bool> TryBrowserAsync(string url, CancellationToken ct)
+    {
+        _browserSolved.Add(HostOf(url));
+        try
+        {
+            Console.WriteLine("  ↻ челендж: відкриваю сторінку в WebView2 — " + HostOf(url));
+            var jar = await BrowserSolve.CookiesForAsync(url, ct);
+            Console.WriteLine("  ↻ челендж: cookies=" + (jar?.Count ?? 0) + ", ua=" + (BrowserSolve.LastUserAgent ?? "—"));
+            if (jar is null || jar.Count == 0) return false;
+            _cookies.Add(new Uri(url), jar);
+            // cf_clearance привʼязаний до User-Agent: далі треба ходити тим самим UA, що й браузер
+            if (!string.IsNullOrWhiteSpace(BrowserSolve.LastUserAgent))
+            {
+                _http.DefaultRequestHeaders.Remove("User-Agent");
+                _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", BrowserSolve.LastUserAgent);
+            }
+            return true;
+        }
+        catch (Exception ex)
+        {
+            try { Console.WriteLine("  ! браузерний обхід не вдався: " + ex.Message); } catch { }
+            return false;
+        }
+    }
+
+    /// <summary>Тіло — сторінка челенджу Cloudflare (буває з кодом 200): проходимо браузером.</summary>
+    public async Task<bool> SolveChallengeAsync(string url, string body, CancellationToken ct)
+    {
+        if (!BrowserSolve.IsChallenge(body)) return false;
+        var host = HostOf(url);
+        BrowserSolve.Forget(host);
+        _browserSolved.Remove(host);
+        return await TryBrowserAsync(url, ct);
+    }
+
     public async Task<HttpResponseMessage> SendAsync(string url, int rps, CancellationToken ct)
     {
         Exception? last = null;
@@ -214,6 +253,12 @@ public sealed class Fetcher : IDisposable
                     if (attempt < 2)
                     {
                         await Task.Delay(TimeSpan.FromSeconds(Math.Min(Math.Max(retryAfter, 3), 60)), ct);
+                        continue;
+                    }
+                    // 403 + челендж Cloudflare: проходимо його браузером і повторюємо з його cookies
+                    if (code == 403 && !_browserSolved.Contains(HostOf(url)) && await TryBrowserAsync(url, ct))
+                    {
+                        attempt--;   // обхід не рахується як спроба
                         continue;
                     }
                     throw new BlockedException("HTTP " + code + " — сайт відмовляє");
@@ -248,6 +293,11 @@ public sealed class Fetcher : IDisposable
             catch (HttpRequestException ex) when (ex.Message.Contains("SSL", StringComparison.OrdinalIgnoreCase))
             {
                 last = new NetworkDownException("TLS-з'єднання відхилено (" + HostOf(url) + ")");
+                if (attempt >= 1) throw last;
+            }
+            catch (HttpRequestException ex)
+            {
+                last = new NetworkDownException("мережа: " + ex.Message + " (" + HostOf(url) + ")");
                 if (attempt >= 1) throw last;
             }
         }
@@ -324,6 +374,25 @@ public sealed class Fetcher : IDisposable
         }
         catch (BlockedException)
         {
+            // Один візит браузера: і cf_clearance, і сам html (другий захід сайт ріже 403)
+            Console.WriteLine("  ↻ челендж: відкриваю браузер — " + HostOf(url));
+            string? viaBrowser = null;
+            try
+            {
+                var (jar, html) = await BrowserSolve.SolvePageAsync(url, ct);
+                if (!string.IsNullOrWhiteSpace(BrowserSolve.LastUserAgent))
+                {
+                    _http.DefaultRequestHeaders.Remove("User-Agent");
+                    _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", BrowserSolve.LastUserAgent);
+                }
+                if (jar is { Count: > 0 }) { try { _cookies.Add(new Uri(url), jar); } catch { } }
+                viaBrowser = html;
+                Console.WriteLine("  ↻ челендж: cookies=" + (jar?.Count ?? 0) + ", html=" + (html?.Length ?? 0) + " символів");
+            }
+            catch (Exception ex) { Console.WriteLine("  ! браузер не спрацював: " + ex.Message); }
+
+            if (!string.IsNullOrWhiteSpace(viaBrowser) && !BrowserSolve.IsChallenge(viaBrowser)) return viaBrowser;
+
             var (ok, body) = await CurlAsync(url, ct);
             if (!ok) throw;
             _curlHosts.Add(HostOf(url));
@@ -332,7 +401,23 @@ public sealed class Fetcher : IDisposable
         using var _ = resp;
         var text = await WithDeadline(t => resp.Content.ReadAsStringAsync(t), 120, ct, HostOf(url));
         if (IsPlaceholder(text)) throw new BlockedException("сайт віддає заглушку «Under Maintenance»");
-        if (IsCaptcha(text)) throw new BlockedException("капча/челендж");
+        if (IsCaptcha(text) || BrowserSolve.IsChallenge(text))
+        {
+            if (await SolveChallengeAsync(url, text, ct))
+            {
+                try
+                {
+                    using var retry = await SendAsync(url, rps, ct);
+                    var page = await retry.Content.ReadAsStringAsync(ct);
+                    if (!IsCaptcha(page) && !BrowserSolve.IsChallenge(page) && !IsPlaceholder(page)) return page;
+                }
+                catch (BlockedException) { /* TLS-відбиток не той — беремо текст із браузера */ }
+
+                var viaBrowser = await BrowserSolve.GetTextAsync(url, ct);
+                if (!string.IsNullOrWhiteSpace(viaBrowser) && !BrowserSolve.IsChallenge(viaBrowser)) return viaBrowser;
+            }
+            throw new BlockedException("челендж Cloudflare не пройдено");
+        }
         return text;
     }
 

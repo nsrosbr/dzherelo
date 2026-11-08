@@ -456,7 +456,8 @@ namespace Dzherelo
         if (lv.Columns.Count == 0) return;
         int used = 0;
         for (int i = 0; i < lv.Columns.Count - 1; i++) used += lv.Columns[i].Width;
-        int rest = lv.ClientSize.Width - used - 2;
+        // мінус вертикальна смуга: інакше з'являється горизонтальна прокрутка
+        int rest = lv.ClientSize.Width - used - SystemInformation.VerticalScrollBarWidth - 4;
         lv.Columns[^1].Width = Math.Max(min, rest);
     }
 

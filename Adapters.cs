@@ -260,11 +260,13 @@ public static class Adapters
 
         // A single article page (BNTU handle, Engineer magazine, The Cove) is itself the
         // document; a listing page is not, so it is only yielded when it has no PDFs.
-        if (pdfs.Count == 0) yield return new DocRef(s.Url, pageTitle, "", true);
+        // Сторінка-список сама собою документом не є: якщо з неї веде багато посилань — це листинг.
+        if (pdfs.Count == 0 && links.Count(l => Match(s, l)) <= 3 && !s.Url.EndsWith("/backgrounders"))
+            yield return new DocRef(s.Url, pageTitle, "", true);
 
         if (s.Depth < 1) yield break;
 
-        var pageHost = new Uri(s.Url).Host;
+        var pageHost = BareHost(new Uri(s.Url));
         int n = 0;
         foreach (var l in links.Where(l => !IsPdfUrl(l)).Distinct())
         {
@@ -273,7 +275,7 @@ public static class Adapters
             // Compare the real host: a LinkedIn share link carries the site URL in its query
             // and would otherwise pass a substring check.
             if (!Uri.TryCreate(l, UriKind.Absolute, out var linkUri)
-                || !linkUri.Host.Equals(pageHost, StringComparison.OrdinalIgnoreCase)) continue;
+                || !BareHost(linkUri).Equals(pageHost, StringComparison.OrdinalIgnoreCase)) continue;
             if (l.Contains("/cdn-cgi/", StringComparison.OrdinalIgnoreCase)) continue; // CF email obfuscation
             if (Uri.TryCreate(l, UriKind.Absolute, out var lu) && lu.AbsolutePath.Trim('/').Length == 0) continue;
             if (l.Contains("/bitstreams/", StringComparison.OrdinalIgnoreCase)
@@ -405,6 +407,10 @@ public static class Adapters
                ?? all.FirstOrDefault(l => l.Contains("/bitstreams/", StringComparison.OrdinalIgnoreCase)
                                           && l.Contains("/download", StringComparison.OrdinalIgnoreCase));
     }
+
+    // www.example.org і example.org — той самий сайт: ISW посилається на себе без www.
+    private static string BareHost(Uri u) =>
+        u.Host.StartsWith("www.", StringComparison.OrdinalIgnoreCase) ? u.Host[4..] : u.Host;
 
     public static List<string> ExtractLinks(string html, string baseUrl)
     {

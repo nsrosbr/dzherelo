@@ -169,11 +169,13 @@ internal sealed class MainForm : ThemedForm
         _topics.Columns.Add("Підстава", 520);
 
         _docs = new ListView { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, GridLines = false, BorderStyle = BorderStyle.None, Font = Theme.Body };
-        _docs.Columns.Add("Час", 70);
-        _docs.Columns.Add("Джерело", 190);
-        _docs.Columns.Add("Стан", 170);
-        _docs.Columns.Add("Розмір", 80, HorizontalAlignment.Right);
-        _docs.Columns.Add("Адреса", 620);
+        _docs.Columns.Add("Час", 66);
+        _docs.Columns.Add("Джерело", 150);
+        _docs.Columns.Add("Дата", 84);
+        _docs.Columns.Add("Стан", 150);
+        _docs.Columns.Add("Розмір", 74, HorizontalAlignment.Right);
+        _docs.Columns.Add("У бібліотеці", 96);
+        _docs.Columns.Add("Адреса", 520);
 
         _right = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, SplitterWidth = 8, BackColor = Theme.PageBg };
         _right.Panel1.Controls.Add(CardOf("Результати джерел", _list));
@@ -183,8 +185,8 @@ internal sealed class MainForm : ThemedForm
         var treeCard = new Card { Dock = DockStyle.Fill, Padding = new Padding(14, 10, 14, 10) };
         var treeTitle = Ui.Caption("Джерела", 0, 0, 300);
         treeTitle.Dock = DockStyle.Top; treeTitle.Height = 20;
-        var treeHint = Ui.Caption("☑ — у збір · вибір рядка — фільтр «Документів»", 0, 0, 420);
-        treeHint.Dock = DockStyle.Bottom; treeHint.Height = 18;
+        var treeHint = Ui.Caption("☑ — у збір · вибір рядка — фільтр «Документів»", 0, 0, 300);
+        treeHint.Dock = DockStyle.Bottom; treeHint.Height = 18; treeHint.AutoEllipsis = true;
         _tree.Dock = DockStyle.Fill;
         treeCard.Controls.Add(_tree);
         treeCard.Controls.Add(treeHint);
@@ -343,8 +345,10 @@ internal sealed class MainForm : ThemedForm
     {
         var item = new ListViewItem(r.T);
         item.SubItems.Add(r.Src);
+        item.SubItems.Add("");
         item.SubItems.Add(r.St);
         item.SubItems.Add(r.Bytes > 0 ? (r.Bytes / 1024 / 1024.0).ToString("0.0") + " МБ" : "");
+        item.SubItems.Add("");
         item.SubItems.Add(r.Url);
         item.ForeColor = r.St switch
         {
@@ -356,6 +360,38 @@ internal sealed class MainForm : ThemedForm
         if (_docs.Items.Count > DocRowsMax) _docs.Items.RemoveAt(0);
         if (_docs.Visible) _docs.EnsureVisible(_docs.Items.Count - 1);
         _lblDocsCount.Text = _docRows.Count.ToString("N0") + " подій";
+    }
+
+    // Назва зі сторінки є не завжди (HTML-списки дають лише адреси) — тоді показуємо slug,
+    // це чесніше за «(без назви)», яке виглядало як помилка.
+    // Дата часто є тільки в адресі (ISW: …-november-7-2026). Беремо її звідти, інакше — рік.
+    private static readonly string[] Months =
+        { "january","february","march","april","may","june","july","august","september","october","november","december" };
+
+    private static string GuessDate(string url)
+    {
+        var low = url.ToLowerInvariant();
+        for (int i = 0; i < Months.Length; i++)
+        {
+            var m = System.Text.RegularExpressions.Regex.Match(low, Months[i] + @"-(\d{1,2})-(20\d{2})");
+            if (m.Success && int.TryParse(m.Groups[1].Value, out var day) && day is >= 1 and <= 31)
+                return m.Groups[2].Value + "-" + (i + 1).ToString("00") + "-" + day.ToString("00");
+        }
+        var y = Harvester.YearFromUrl(url);
+        return y;
+    }
+
+    private static string TitleOrSlug(DocRef d)
+    {
+        if (!string.IsNullOrWhiteSpace(d.Title)) return d.Title.Trim();
+        try
+        {
+            var path = new Uri(d.Url).AbsolutePath.TrimEnd('/');
+            var slug = path[(path.LastIndexOf('/') + 1)..];
+            slug = Uri.UnescapeDataString(slug).Replace('-', ' ').Replace('_', ' ').Trim();
+            return slug.Length > 3 ? char.ToUpper(slug[0]) + slug[1..] : d.Url;
+        }
+        catch { return d.Url; }
     }
 
     private void RebuildDocs()
@@ -425,21 +461,34 @@ internal sealed class MainForm : ThemedForm
             var h = new Harvester { SinceYear = SinceYearValue(), NewOnly = _chkNew.Checked, OnLog = Log };
             var docs = await Task.Run(() => h.PreviewAsync(s, store, _cts.Token));
 
+            int skippedOld = 0, already = 0;
             _docs.BeginUpdate();
             foreach (var d in docs)
             {
+                var date = d.Date;
+                if (string.IsNullOrWhiteSpace(date)) date = GuessDate(d.Url);
+                // фільтр «з року» діє і в огляді: старі документи не показуємо
+                if (int.TryParse(Naming.Year(date), out var y) && y > 1900 && y < SinceYearValue()) { skippedOld++; continue; }
+
+                bool inLib = store.HasUrl(d.Url);
+                if (inLib) already++;
                 var it = new ListViewItem(DateTime.Now.ToString("HH:mm"));
                 it.SubItems.Add(s.Name);
+                it.SubItems.Add(string.IsNullOrWhiteSpace(date) ? "—" : date);
                 it.SubItems.Add("знайдено");
                 it.SubItems.Add("");
-                it.SubItems.Add(string.IsNullOrWhiteSpace(d.Title) ? d.Url : d.Title);
+                it.SubItems.Add(inLib ? "є" : "немає");
+                it.SubItems.Add(TitleOrSlug(d));
                 it.Tag = d;
                 it.ToolTipText = d.Url;
+                if (inLib) it.ForeColor = Theme.TextSecondary;
                 _docs.Items.Add(it);
             }
             _docs.EndUpdate();
-            _lblDocsTitle.Text = "Огляд — " + s.Name + ": " + docs.Count + " документів";
-            _lblDocsCount.Text = docs.Count.ToString("N0") + " документів";
+            _lblDocsTitle.Text = "Огляд — " + s.Name + ": " + _docs.Items.Count + " документів"
+                + (already > 0 ? " · уже в бібліотеці " + already : "")
+                + (skippedOld > 0 ? " · відсіяно старих " + skippedOld : "");
+            _lblDocsCount.Text = _docs.Items.Count.ToString("N0") + " документів";
         }
         catch (Exception ex)
         {
@@ -483,8 +532,9 @@ internal sealed class MainForm : ThemedForm
                 {
                     if (byUrl.TryGetValue(url, out var it))
                     {
-                        it.SubItems[2].Text = state;
-                        it.SubItems[3].Text = bytes > 0 ? (bytes / 1024 / 1024.0).ToString("0.0") + " МБ" : "";
+                        it.SubItems[3].Text = state;
+                        it.SubItems[4].Text = bytes > 0 ? (bytes / 1024 / 1024.0).ToString("0.0") + " МБ" : "";
+                        if (state == "завантажено") it.SubItems[5].Text = "є";
                     }
                     AddDoc(name, url, state, bytes);
                 }),

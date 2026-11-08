@@ -477,14 +477,26 @@ public sealed class Harvester
     /// <summary>Розібрати список джерела й НІЧОГО не качати (для екрана «Документи»).</summary>
     public async Task<List<DocRef>> PreviewAsync(Source s, Catalog store, CancellationToken ct)
     {
+        if (s.Manual)
+        {
+            Log("  ручне джерело: автоматичний обхід вимкнено (" + (string.IsNullOrWhiteSpace(s.Note) ? "див. sources.json" : s.Note) + ")");
+            return new List<DocRef>();
+        }
         var stats = new DiscoveryStats();
         using var fetch = new Fetcher(Path.Combine(store.Root, "state")) { MinIntervalMs = 1000 };
         var list = new List<DocRef>();
-        await foreach (var d in Adapters.DiscoverAsync(s, fetch, SinceYear, stats, _cursors, ct))
+        try
         {
-            if (list.Any(x => Catalog.Canonical(x.Url) == Catalog.Canonical(d.Url))) continue;
-            list.Add(d);
-            if (list.Count >= MaxDocsPerSource) { stats.Capped = true; break; }
+            await foreach (var d in Adapters.DiscoverAsync(s, fetch, SinceYear, stats, _cursors, ct))
+            {
+                if (list.Any(x => Catalog.Canonical(x.Url) == Catalog.Canonical(d.Url))) continue;
+                list.Add(d);
+                if (list.Count >= MaxDocsPerSource) { stats.Capped = true; break; }
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Log("  огляд зупинився: " + ex.Message);   // частковий список краще за падіння
         }
         Log("  огляд: " + list.Count + " документів, нічого не завантажено");
         return list;

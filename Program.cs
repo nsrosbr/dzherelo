@@ -138,6 +138,16 @@ internal static class Program
             Directory.CreateDirectory(root);
             var src = Registry.Load().FirstOrDefault(s => s.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
             if (src == null) { Console.WriteLine("немає джерела: " + id); return 2; }
+            var saveIdx = Array.FindIndex(args, a => a.Equals("--save-html", StringComparison.OrdinalIgnoreCase));
+            if (saveIdx >= 0 && saveIdx + 1 < args.Length)
+            {
+                using var f = new Fetcher(Path.Combine(root, "state"));
+                var text = f.GetTextAsync(src.Url, src.Rps > 0 ? src.Rps : 1, default).GetAwaiter().GetResult();
+                File.WriteAllText(args[saveIdx + 1], text);
+                Console.WriteLine("html: " + text.Length + " символів → " + args[saveIdx + 1]);
+                return 0;
+            }
+
             using var cat = new Catalog(root);
             var h = new Harvester { SinceYear = AppSettings.Load().SinceYear, OnLog = Console.WriteLine };
             var docs = h.PreviewAsync(src, cat, default).GetAwaiter().GetResult();
