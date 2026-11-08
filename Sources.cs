@@ -31,7 +31,11 @@ public sealed class Source
     // Last-resort host->IP pin for sources whose DNS is broken more often than not.
     public string? Resolve { get; set; }
     public int Depth { get; set; }
-    public int MaxPages { get; set; } = 400;
+    public int MaxPages { get; set; }
+    // скільки сторінок переліку обійти (WordPress: /page/N/) — інакше видно лише першу
+    public int Pages { get; set; }
+    // які дочірні мапи sitemap_index брати (regex по адресі мапи), напр. "post-sitemap"
+    public string? MapsInclude { get; set; }
     public bool KeepHtml { get; set; }
     public string Lang { get; set; } = "en";
     // honest flags: never report success for these

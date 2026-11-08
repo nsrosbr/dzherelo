@@ -90,6 +90,59 @@ internal static class BrowserSolve
         return tcs.Task.WaitAsync(TimeSpan.FromSeconds(120), ct);
     }
 
+
+    /// <summary>
+    /// Тягне будь-який ресурс (XML, HTML, PDF-текст) через fetch() у контексті сторінки:
+    /// той самий TLS-відбиток і cookies, що пройшли челендж. Це і є обхід.
+    /// </summary>
+    public static Task<string?> FetchRawAsync(string url, CancellationToken ct)
+    {
+        var tcs = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var thread = new Thread(() =>
+        {
+            var form = new Form
+            {
+                Width = 1100, Height = 800, ShowInTaskbar = false,
+                StartPosition = FormStartPosition.Manual, Location = new Point(-3000, -3000),
+                FormBorderStyle = FormBorderStyle.None,
+            };
+            var view = new WebView2 { Dock = DockStyle.Fill };
+            form.Controls.Add(view);
+
+            form.Shown += async (_, _) =>
+            {
+                try
+                {
+                    var data = Path.Combine(Path.GetTempPath(), "dzherelo-webview2", "main");
+                    var env = await CoreWebView2Environment.CreateAsync(null, data);
+                    await view.EnsureCoreWebView2Async(env);
+                    try { LastUserAgent = view.CoreWebView2.Settings.UserAgent; } catch { }
+
+                    var origin = new Uri(url).GetLeftPart(UriPartial.Authority) + "/";
+                    var arrived = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                    view.CoreWebView2.NavigationCompleted += (_, e) => arrived.TrySetResult(e.IsSuccess);
+                    view.CoreWebView2.Navigate(origin);
+                    await Task.WhenAny(arrived.Task, Task.Delay(40000, ct));
+                    await Task.Delay(800, ct);
+
+                    var js = "(async () => { const r = await fetch(" + System.Text.Json.JsonSerializer.Serialize(url) +
+                             ", {credentials:'include'}); return await r.text(); })()";
+                    var raw = await view.CoreWebView2.ExecuteScriptAsync(js);
+                    tcs.TrySetResult(UnescapeScriptResult(raw));
+                }
+                catch (Exception ex) { tcs.TrySetException(ex); }
+                finally { try { form.Close(); } catch { } }
+            };
+
+            try { Application.Run(form); }
+            catch (Exception ex) { tcs.TrySetException(ex); }
+        });
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.IsBackground = true;
+        thread.Start();
+        return tcs.Task.WaitAsync(TimeSpan.FromSeconds(150), ct);
+    }
+
     // ExecuteScriptAsync віддає JSON-рядок у лапках із екрануванням.
     private static string UnescapeScriptResult(string raw)
     {

@@ -215,15 +215,27 @@ public static class Adapters
         var found = new List<(string Loc, string Lastmod)>();
         var seenMaps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        while (queue.Count > 0 && seenMaps.Count < 25)
+        while (queue.Count > 0 && seenMaps.Count < 100)
         {
             var mapUrl = queue.Dequeue();
             if (!seenMaps.Add(mapUrl)) continue;
             var xml = await f.GetTextAsync(mapUrl, s.Rps, ct);
+            if (Environment.GetEnvironmentVariable("DZ_DEBUG") == "1")
+                Console.WriteLine($"  · мапа {mapUrl} — {xml.Length} символів, index={xml.Contains("<sitemapindex", StringComparison.OrdinalIgnoreCase)}, urls={xml.Split("<url>").Length - 1}, found={found.Count}");
             if (xml.Contains("<sitemapindex", StringComparison.OrdinalIgnoreCase))
             {
                 foreach (Match m in Regex.Matches(xml, @"<loc>([^<]+)</loc>"))
-                    queue.Enqueue(WebUtility.HtmlDecode(m.Groups[1].Value.Trim()));
+                {
+                    var map = WebUtility.HtmlDecode(m.Groups[1].Value.Trim());
+                    // Yoast дробить мапи по типах (post-, page-, people-, map-…).
+                    // Беремо лише ті, що реально містять документи — інакше десятки зайвих візитів.
+                    if (!string.IsNullOrWhiteSpace(s.MapsInclude)
+                        && !Regex.IsMatch(map, s.MapsInclude!, RegexOptions.IgnoreCase)) continue;
+                    // Тримаємо той самий хост, що й джерело: fetch() у браузері не піде на «сусідній»
+                    // understandingwar.org без www (cross-origin) і поверне порожнечу.
+                    map = WithHost(map, new Uri(s.Url).Host);
+                    queue.Enqueue(map);
+                }
                 continue;
             }
             foreach (Match m in Regex.Matches(xml, @"<url>[\s\S]*?</url>"))
@@ -254,6 +266,23 @@ public static class Adapters
         var html = await f.GetTextAsync(s.Url, s.Rps, ct);
         var links = ExtractLinks(html, s.Url);
         var pageTitle = PageTitle(html);
+
+        // Перелік рідко вміщається на одній сторінці: WordPress віддає /page/2/, /page/3/…
+        if (s.Pages > 1)
+        {
+            var baseUrl = s.Url.TrimEnd('/');
+            for (int p = 2; p <= s.Pages; p++)
+            {
+                string more;
+                try { more = await f.GetTextAsync(baseUrl + "/page/" + p + "/", s.Rps, ct); }
+                catch { break; }
+                var extra = ExtractLinks(more, s.Url);
+                if (extra.Count == 0) break;
+                var fresh = extra.Where(l => !links.Contains(l)).ToList();
+                if (fresh.Count == 0) break;
+                links.AddRange(fresh);
+            }
+        }
 
         var pdfs = links.Where(IsPdfUrl).Where(l => Match(s, l)).Distinct().ToList();
         foreach (var p in pdfs.Take(MaxDocs)) yield return new DocRef(p, "", "", false);
@@ -324,6 +353,15 @@ public static class Adapters
     }
 
     // ---------- helpers ----------
+    private static string WithHost(string url, string host)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var u)) return url;
+        var bare = u.Host.StartsWith("www.", StringComparison.OrdinalIgnoreCase) ? u.Host[4..] : u.Host;
+        var want = host.StartsWith("www.", StringComparison.OrdinalIgnoreCase) ? host[4..] : host;
+        if (!bare.Equals(want, StringComparison.OrdinalIgnoreCase)) return url;
+        return new UriBuilder(u) { Host = host }.Uri.ToString();
+    }
+
     public static bool Match(Source s, string url)
     {
         if (!string.IsNullOrWhiteSpace(s.Include) && !Regex.IsMatch(url, s.Include!, RegexOptions.IgnoreCase)) return false;

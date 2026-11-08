@@ -71,7 +71,7 @@ internal static class Program
         if (args.Length > 0 && (args[0].StartsWith("--") || args[0].StartsWith("/")))
         {
             string[] known = { "--setup", "--install", "--uninstall", "--selftest", "--collect", "--list",
-                               "--relayout", "--probe", "--reindex", "--revert-adapter", "--topics", "--canon", "--help", "-h", "/?", "--set-secret", "--get-secret-check", "--secret-b64", "--update", "--check", "--force", "--about", "--preview", "--models", "--judge", "--model" };
+                               "--relayout", "--probe", "--reindex", "--revert-adapter", "--topics", "--canon", "--help", "-h", "/?", "--set-secret", "--get-secret-check", "--secret-b64", "--update", "--check", "--force", "--about", "--preview", "--models", "--judge", "--model", "--fetch" };
             if (!known.Contains(args[0], StringComparer.OrdinalIgnoreCase))
             {
                 AttachConsole(-1);
@@ -153,6 +153,21 @@ internal static class Program
                 Console.WriteLine($"  ✓ {d.Title} → {j.Type} / {(d.Topic.Length == 0 ? "—" : d.Topic)} / {j.Lang} (впевненість {j.Confidence:0.00})");
             }
             Console.WriteLine("застосовано: " + ok);
+            return 0;
+        }
+
+        // діагностика: узяти одну адресу тим самим шляхом, що й рушій (з обходом, якщо треба)
+        if (args.Any(a => a.Equals("--fetch", StringComparison.OrdinalIgnoreCase)))
+        {
+            var fi = Array.FindIndex(args, a => a.Equals("--fetch", StringComparison.OrdinalIgnoreCase));
+            if (fi < 0 || fi + 1 >= args.Length) { Console.WriteLine("--fetch <url> [--out файл]"); return 2; }
+            var target = args[fi + 1];
+            var oi = Array.FindIndex(args, a => a.Equals("--out", StringComparison.OrdinalIgnoreCase));
+            using var f = new Fetcher(Path.Combine(Path.GetTempPath(), "dzherelo-fetch"));
+            var body = f.GetTextAsync(target, 1, default).GetAwaiter().GetResult();
+            Console.WriteLine("отримано: " + body.Length + " символів");
+            if (oi >= 0 && oi + 1 < args.Length) { File.WriteAllText(args[oi + 1], body); Console.WriteLine("→ " + args[oi + 1]); }
+            else Console.WriteLine(body.Length > 400 ? body[..400] : body);
             return 0;
         }
 

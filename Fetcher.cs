@@ -391,7 +391,25 @@ public sealed class Fetcher : IDisposable
             }
             catch (Exception ex) { Console.WriteLine("  ! браузер не спрацював: " + ex.Message); }
 
+            // XML (sitemap) рендер браузера псує — тягнемо сирим fetch(), інакше адаптер його не розпізнає
+            if (url.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    var raw = await BrowserSolve.FetchRawAsync(url, ct);
+                    if (!string.IsNullOrWhiteSpace(raw)) return raw;
+                }
+                catch { }
+            }
+
             if (!string.IsNullOrWhiteSpace(viaBrowser) && !BrowserSolve.IsChallenge(viaBrowser)) return viaBrowser;
+
+            try
+            {
+                var rawText = await BrowserSolve.FetchRawAsync(url, ct);
+                if (!string.IsNullOrWhiteSpace(rawText) && !BrowserSolve.IsChallenge(rawText)) return rawText;
+            }
+            catch { }
 
             var (ok, body) = await CurlAsync(url, ct);
             if (!ok) throw;
@@ -400,6 +418,20 @@ public sealed class Fetcher : IDisposable
         }
         using var _ = resp;
         var text = await WithDeadline(t => resp.Content.ReadAsStringAsync(t), 120, ct, HostOf(url));
+
+        // 200 із HTML-сторінкою замість XML буває у Cloudflare: тоді беремо сирий fetch() у браузері
+        if (url.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)
+            && !text.Contains("<urlset", StringComparison.OrdinalIgnoreCase)
+            && !text.Contains("<sitemapindex", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                var raw = await BrowserSolve.FetchRawAsync(url, ct);
+                if (!string.IsNullOrWhiteSpace(raw)) return raw;
+            }
+            catch { }
+        }
+
         if (IsPlaceholder(text)) throw new BlockedException("сайт віддає заглушку «Under Maintenance»");
         if (IsCaptcha(text) || BrowserSolve.IsChallenge(text))
         {
