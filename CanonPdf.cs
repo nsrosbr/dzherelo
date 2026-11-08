@@ -124,7 +124,7 @@ strong {{ color: #0F1724; }}
         foreach (var line in t.Split('\n'))
         {
             var clean = System.Text.RegularExpressions.Regex.Replace(line, @"\s+", " ").Trim();
-            if (clean.Length >= 12) paras.Append("<p>").Append(Html(clean)).Append("</p>\n");
+            if (clean.Length >= 2) paras.Append("<p>").Append(Html(clean)).Append("</p>\n");
         }
         return paras.ToString();
     }
@@ -139,7 +139,7 @@ strong {{ color: #0F1724; }}
     private static Task<string> RenderCoreAsync(string html, string outPath, CancellationToken ct, bool textOnly = false, string? url = null)
     {
         var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var thread = new Thread(() => RenderLoop(html, outPath, tcs, textOnly, url));
+        var thread = new Thread(() => RenderLoop(html, outPath, tcs, textOnly, url, ct));
         thread.SetApartmentState(ApartmentState.STA);
         thread.IsBackground = true;
         thread.Start();
@@ -172,7 +172,7 @@ strong {{ color: #0F1724; }}
         _ = await RenderCoreAsync(doc, Path.GetFullPath(outPath), ct);
     }
 
-    private static void RenderLoop(string html, string outPath, TaskCompletionSource<string> tcs, bool textOnly, string? url)
+    private static void RenderLoop(string html, string outPath, TaskCompletionSource<string> tcs, bool textOnly, string? url, CancellationToken ct)
     {
         try
         {
@@ -203,8 +203,16 @@ strong {{ color: #0F1724; }}
                     if (!string.IsNullOrEmpty(outPath))
                         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outPath))!);
                     var nav = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-                    core.NavigationCompleted += (_, e) => nav.TrySetResult(e.IsSuccess);
+                    core.NavigationCompleted += (_, e) =>
+                    {
+                        if (!e.IsSuccess) nav.TrySetException(new InvalidOperationException("навігація не вдалася: " + url));
+                        else nav.TrySetResult(true);
+                    };
+                    ct.Register(() => { try { nav.TrySetCanceled(); } catch { } });
                     if (url != null) core.Navigate(url); else core.NavigateToString(html);
+                    // навігація не може висіти вічно: 60 с і далі — код помилки, а не мовчазне чекання
+                    var done = await Task.WhenAny(nav.Task, Task.Delay(TimeSpan.FromSeconds(60), ct));
+                    if (done != nav.Task) throw new TimeoutException("навігація WebView2 не завершилась за 60 с");
                     await nav.Task;
                     await Task.Delay(textOnly ? 5000 : 250);   // JS-сторінки: дати гідрації завершитись перед зняттям innerText
                     if (textOnly)
@@ -214,7 +222,8 @@ strong {{ color: #0F1724; }}
                     }
                     else
                     {
-                        _ = await core.PrintToPdfAsync(outPath);
+                        var printed = await core.PrintToPdfAsync(outPath);
+                        if (!printed) throw new InvalidOperationException("PrintToPdfAsync повернув false");
                         tcs.TrySetResult("");
                     }
                 }

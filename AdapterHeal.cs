@@ -23,8 +23,8 @@ public static class AdapterHeal
     }
 
     private static HashSet<string> Set(IEnumerable<string> xs) =>
-        new(xs.Where(u => !string.IsNullOrWhiteSpace(u)).Select(Catalog.Canonical),
-            StringComparer.OrdinalIgnoreCase);
+        new(xs.Where(u => !string.IsNullOrWhiteSpace(u)).Select(u => u.Trim()),
+            StringComparer.OrdinalIgnoreCase);   // query НЕ зрізаємо: download?id=1 і ?id=2 — різні документи
 
     // Кандидати в порядку перебору, без поточного й уже пробуваних.
     public static IEnumerable<string> CandidateKinds(string current, IEnumerable<string>? tried = null)
@@ -46,7 +46,7 @@ public static class AdapterHeal
 
     // Staging: проганяє кандидатів на живому Fetcher і повертає першого, чий набір URL збігся
     // з базою. Повертає (candidate, proof) або (null, 0).
-    public static async Task<(string? Kind, int Proof)> HealAsync(Source s, Fetcher f, Catalog store, CancellationToken ct)
+    public static async Task<(string? Kind, int Proof)> HealAsync(Source s, Fetcher f, Catalog store, int sinceYear, CancellationToken ct)
     {
         var baseline = KnownUrls(store, s);
         if (baseline.Count == 0) return (null, 0);
@@ -59,7 +59,7 @@ public static class AdapterHeal
             var stats = new DiscoveryStats();
             try
             {
-                await foreach (var d in Adapters.DiscoverAsync(probe, f, 0, stats, null, ct))
+                await foreach (var d in Adapters.DiscoverAsync(probe, f, sinceYear, stats, null, ct))
                 {
                     got.Add(d.Url);
                     // +1: перелишок (кандидат бачить більше, ніж було) не ховається за зрізом
@@ -145,7 +145,12 @@ public static class AdapterHeal
         // --- правило прийняття: та сама множина URL ---
         Check("збіг набору URL — приймається",
             SameUrlSet(new[] { "https://x/a.pdf", "https://x/b.pdf" },
-                       new[] { "https://x/b.pdf", "https://X/a.pdf?download=1" }));
+                       new[] { "https://x/b.pdf", "https://X/a.pdf" }));
+        Check("query робить URL іншим (download?id=1 ≠ ?id=2)",
+            !SameUrlSet(new[] { "https://x/download?id=1" }, new[] { "https://x/download?id=2" }));
+        Check("зайвий query — це вже інший документ, не збіг",
+            !SameUrlSet(new[] { "https://x/a.pdf", "https://x/b.pdf" },
+                        new[] { "https://x/b.pdf", "https://X/a.pdf?download=1" }));
         Check("один з N — не доказ (підмножина)",
             !SameUrlSet(new[] { "https://x/a.pdf" }, new[] { "https://x/a.pdf", "https://x/b.pdf" }));
         Check("перелишок — не збіг",

@@ -242,9 +242,10 @@ public sealed class Harvester
     {
         if (_heal is null) return false;
         if (AdapterHeal.KnownUrls(store, s).Count == 0) return false;
+        if (r.Duplicates > 0 || r.Skipped > 0) return false;   // документи БУЛИ, просто вже наявні — це не збій
         try
         {
-            var (candidate, proof) = await AdapterHeal.HealAsync(s, fetch, store, ct);
+            var (candidate, proof) = await AdapterHeal.HealAsync(s, fetch, store, SinceYear, ct);
             if (candidate is null) return false;
             var prev = s.Kind;
             s.Kind = candidate;

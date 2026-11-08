@@ -73,11 +73,12 @@ public static class Adapters
             }
 
             var tok = Regex.Match(xml, @"<resumptionToken[^>]*>([^<]*)</resumptionToken>");
-            next = tok.Success && tok.Groups[1].Value.Trim().Length > 0
-                ? s.Url + sep + "verb=ListRecords&resumptionToken=" + Uri.EscapeDataString(tok.Groups[1].Value.Trim())
+            // resumptionToken приходить XML-закодованим (&amp;); декодуємо ДО escape, інакше валідне відновлення ламається
+            var token = System.Net.WebUtility.HtmlDecode(tok.Groups[1].Value.Trim());
+            next = tok.Success && token.Length > 0
+                ? s.Url + sep + "verb=ListRecords&resumptionToken=" + Uri.EscapeDataString(token)
                 : null;
-            // зберігаємо точку, поки є наступна сторінка; кінець переліку стирає курсор
-            cursors?.Set(s.Id, next is null ? null : tok.Groups[1].Value.Trim());
+            cursors?.Set(s.Id, next is null ? null : token);
         }
     }
 
@@ -88,7 +89,7 @@ public static class Adapters
         var api = s.Url.TrimEnd('/') + "/server/api";
         int totalPages = 1;
         var resume = int.TryParse(cursors?.Get(s.Id), out var p0) ? p0 : 0;
-        for (int page = resume; page < Math.Min(totalPages, 200); page++)
+        for (int page = resume; page < Math.Min(totalPages, 2000); page++)
         {
             var q = api + "/discover/search/objects?size=100&page=" + page;
             if (!string.IsNullOrWhiteSpace(s.Query)) q += "&query=" + Uri.EscapeDataString(s.Query!);
@@ -126,7 +127,7 @@ public static class Adapters
                 if (pdf == null) continue;
                 yield return new DocRef(pdf, it.Title, it.Date, false);
             }
-            cursors?.Set(s.Id, page + 1 < Math.Min(totalPages, 200) ? (page + 1).ToString() : null);
+            cursors?.Set(s.Id, page + 1 < Math.Min(totalPages, 2000) ? (page + 1).ToString() : null);
         }
     }
 
@@ -176,12 +177,12 @@ public static class Adapters
     {
         var api = s.Url.TrimEnd('/');
         var resume = int.TryParse(cursors?.Get(s.Id), out var p1) ? p1 : 1;
-        for (int page = resume; page <= 100; page++)
+        for (int page = resume; page <= 10000; page++)
         {
             var q = api + "/wp-json/wp/v2/posts?per_page=100&page=" + page + "&_fields=link,date,title";
             if (sinceYear > 0) q += "&after=" + sinceYear + "-01-01T00:00:00";
             var json = await f.GetJsonAsync(q, s.Rps, ct);
-            if (json.TrimStart().StartsWith("{")) yield break;
+            if (json.TrimStart().StartsWith("{")) { cursors?.Set(s.Id, null); yield break; }
             var batch = new List<DocRef>();
             try
             {
@@ -198,10 +199,10 @@ public static class Adapters
                     batch.Add(new DocRef(link, title, date, true));
                 }
             }
-            catch (JsonException) { yield break; }
-            if (batch.Count == 0) yield break;
+            catch (JsonException) { cursors?.Set(s.Id, null); yield break; }
+            if (batch.Count == 0) { cursors?.Set(s.Id, null); yield break; }
             foreach (var d in batch) yield return d;
-            cursors?.Set(s.Id, page < 100 ? (page + 1).ToString() : null);
+            cursors?.Set(s.Id, page < 10000 ? (page + 1).ToString() : null);
         }
     }
 

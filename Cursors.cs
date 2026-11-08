@@ -40,7 +40,7 @@ public sealed class Cursors
             if (File.Exists(_path)) File.Replace(tmp, _path, null);
             else File.Move(tmp, _path);
         }
-        catch { }
+        catch (Exception ex) { Console.WriteLine("  ! курсор не записано: " + ex.Message); }
     }
 
     public static (string Name, bool Ok, string Detail)[] SelfCheck()

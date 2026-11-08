@@ -41,3 +41,5 @@ selftest_out/
 --out/
 response-*.txt
 selftest-report.txt
+
+_verify/

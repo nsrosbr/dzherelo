@@ -135,6 +135,12 @@ public static class Setup
             // Single-file публікація: один exe. Framework-dependent збірка (bin/Release): exe + dll + *.json,
             // інакше встановлений застосунок не стартує — «Dzherelo.dll not found».
             var srcDir = AppContext.BaseDirectory;
+            if (string.Equals(Path.GetFullPath(srcDir).TrimEnd('\\'), targetDir.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
+            {
+                Console.WriteLine("Уже встановлено в цій теці — копіювання пропущено: " + targetDir);
+            }
+            else
+            {
             var frameworkDependent = File.Exists(Path.Combine(srcDir, "Dzherelo.dll"));
             if (frameworkDependent)
             {
@@ -149,6 +155,7 @@ public static class Setup
             else
             {
                 File.Copy(Environment.ProcessPath!, targetExe, overwrite: true);
+            }
             }
         }
         catch (Exception ex)
@@ -214,6 +221,17 @@ public static class Setup
 
         // бібліотеку читаю ДО видалення налаштувань: OutputDir живе в settings.json
         var lib = App.Root(null);
+        var appRootPath = Path.Combine(RootDir, "app");
+        if (IsUnder(lib, appRootPath))
+        {
+            Console.WriteLine("ЗБІЙ: бібліотека лежить усередині теки застосунку — видалення заборонене: " + lib);
+            return 1;
+        }
+        if (purge && IsUnder(lib, RootDir))
+        {
+            Console.WriteLine("ЗБІЙ: --purge стерло б і саму бібліотеку " + lib + ". Винеси її поза " + RootDir);
+            return 1;
+        }
 
         RemoveArp();
         RemoveShortcuts();
@@ -223,20 +241,20 @@ public static class Setup
         {
             foreach (var ver in Directory.GetDirectories(appRoot))
                 TryDeleteTree(ver);
+            var okApp = Directory.Exists(appRoot) ? TryDeleteTree(appRoot) : true;
             try { Directory.Delete(appRoot); } catch { }
             Console.WriteLine("Прибрано програму: " + appRoot);
+            if (!okApp) { Console.WriteLine("ЗБІЙ: не вдалося прибрати " + appRoot); return 1; }
         }
         else Console.WriteLine("Програми не знайдено в " + appRoot);
 
         if (purge)
         {
-            TryDeleteTree(RootDir);
+            var okPurge = TryDeleteTree(RootDir);
             Console.WriteLine("Прибрано налаштування й секрети: " + RootDir);
-            foreach (var sub in new[] { "logs", "state" })
-            {
-                var d = Path.Combine(lib, sub);
-                if (Directory.Exists(d)) { TryDeleteTree(d); Console.WriteLine("Прибрано " + sub + ": " + d); }
-            }
+            if (!okPurge) { Console.WriteLine("ЗБІЙ: не все видалено з " + RootDir); return 1; }
+            // logs/state бібліотеки тут НЕ видаляються: це чужі дані, а не налаштування застосунку.
+            // Вони йдуть лише разом із явним --remove-library (і лише всередині самої бібліотеки).
         }
 
         if (removeLibrary)
@@ -267,17 +285,39 @@ public static class Setup
     }
 
     // не дає видалити корінь диска чи шлях-сам-собі
+    static bool IsUnder(string child, string parent) =>
+        Path.GetFullPath(child).StartsWith(Path.GetFullPath(parent).TrimEnd('\\', '/') + "\\", StringComparison.OrdinalIgnoreCase);
+
+    // Дозволяє видаляти лише теку бібліотеки, і ніколи — системні теки, наш застосунок чи його батьків.
     static bool SafeToDelete(string path)
     {
-        var full = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        var root = (Path.GetPathRoot(full) ?? "").TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        return full.Length > 0 && !string.Equals(full, root, StringComparison.OrdinalIgnoreCase);
+        var full = Path.GetFullPath(path).TrimEnd('\\', '/');
+        if (string.IsNullOrWhiteSpace(full)) return false;
+        var root = (Path.GetPathRoot(full) ?? "").TrimEnd('\\', '/');
+        if (string.Equals(full, root, StringComparison.OrdinalIgnoreCase)) return false;      // корінь диска
+        if (string.Equals(full, RootDir, StringComparison.OrdinalIgnoreCase)) return false;   // сам застосунок
+        if (IsUnder(RootDir, full)) return false;                                           // батько застосунку
+        // блокуємо лише САМІ системні корені, а не будь-яку теку з цим словом у шляху:
+        // застосунок сам живе в %LOCALAPPDATA%, тобто під C:\Users — і це законно.
+        string[] banned = {
+            Environment.GetFolderPath(Environment.SpecialFolder.Windows),
+            Environment.GetFolderPath(Environment.SpecialFolder.System),
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+        };
+        foreach (var b in banned)
+            if (!string.IsNullOrEmpty(b) && string.Equals(full, b.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase))
+                return false;
+        return true;
     }
 
-    static void TryDeleteTree(string path)
+    static bool TryDeleteTree(string path)
     {
-        try { Directory.Delete(path, recursive: true); return; }
-        catch (DirectoryNotFoundException) { return; }
+        try { Directory.Delete(path, recursive: true); return true; }
+        catch (DirectoryNotFoundException) { return true; }
         catch { }
         // файл-за-файлом: замкнені (сам запущений exe) — на вилучення після перезапуску
         try
@@ -288,8 +328,14 @@ public static class Setup
                         .OrderByDescending(d => d.Length))
                 try { Directory.Delete(d); } catch { }
             try { Directory.Delete(path); } catch { }
+            if (Directory.Exists(path))
+            {
+                Console.WriteLine("  ! не вдалося видалити все в " + path);
+                return false;
+            }
+            return true;
         }
-        catch { }
+        catch (Exception ex) { Console.WriteLine("  ! видалення " + path + ": " + ex.Message); return false; }
     }
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
