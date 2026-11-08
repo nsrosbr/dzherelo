@@ -183,13 +183,25 @@ internal sealed class MainForm : ThemedForm
 
         _body = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Vertical, SplitterWidth = 8, BackColor = Theme.PageBg };
         var treeCard = new Card { Dock = DockStyle.Fill, Padding = new Padding(14, 10, 14, 10) };
-        var treeTitle = Ui.Caption("Джерела", 0, 0, 300);
+        var treeTitle = Ui.Caption("Джерела", 0, 0, 200);
         treeTitle.Dock = DockStyle.Top; treeTitle.Height = 20;
         var treeHint = Ui.Caption("☑ — у збір · вибір рядка — фільтр «Документів»", 0, 0, 300);
         treeHint.Dock = DockStyle.Bottom; treeHint.Height = 18; treeHint.AutoEllipsis = true;
         _tree.Dock = DockStyle.Fill;
         treeCard.Controls.Add(_tree);
         treeCard.Controls.Add(treeHint);
+
+        var pickAll = new Panel { Dock = DockStyle.Top, Height = 24, BackColor = Theme.CardBg };
+        var lblAll = Ui.Caption("позначити:", 0, 4, 62);
+        var bAll = new Button { Text = "усі", Width = 46, Height = 22, Left = 64, Top = 1, FlatStyle = FlatStyle.Flat, Font = Theme.Caption };
+        bAll.FlatAppearance.BorderSize = 0; bAll.BackColor = Theme.CardBg; bAll.ForeColor = Theme.Accent;
+        bAll.Click += (_, _) => SetAllSources(true);
+        var bNone = new Button { Text = "жодного", Width = 70, Height = 22, Left = 112, Top = 1, FlatStyle = FlatStyle.Flat, Font = Theme.Caption };
+        bNone.FlatAppearance.BorderSize = 0; bNone.BackColor = Theme.CardBg; bNone.ForeColor = Theme.Accent;
+        bNone.Click += (_, _) => SetAllSources(false);
+        pickAll.Controls.Add(lblAll); pickAll.Controls.Add(bAll); pickAll.Controls.Add(bNone);
+
+        treeCard.Controls.Add(pickAll);
         treeCard.Controls.Add(treeTitle);
         _body.Panel1.Controls.Add(treeCard);
         _body.Panel2.Controls.Add(_right);
@@ -212,8 +224,15 @@ internal sealed class MainForm : ThemedForm
         _btnFetchPicked = new Button { Text = "Завантажити позначені", Left = 178, Top = 4, Width = 200 };
         Ui.StylePrimary(_btnFetchPicked);
         _btnFetchPicked.Click += async (_, _) => await FetchPickedAsync();
-        var lblPick = Ui.Caption("вибери джерело в дереві → «Оглянути» → познач документи", 392, 12, 520);
-        docsBar.Controls.Add(_btnPreview); docsBar.Controls.Add(_btnFetchPicked); docsBar.Controls.Add(lblPick);
+        var bPickAll = new Button { Text = "усі", Width = 46, Height = 26, Left = 392, Top = 8, FlatStyle = FlatStyle.Flat, Font = Theme.Caption };
+        bPickAll.FlatAppearance.BorderSize = 0; bPickAll.BackColor = Theme.CardBg; bPickAll.ForeColor = Theme.Accent;
+        bPickAll.Click += (_, _) => SetAllDocs(true);
+        var bPickNone = new Button { Text = "жодного", Width = 70, Height = 26, Left = 440, Top = 8, FlatStyle = FlatStyle.Flat, Font = Theme.Caption };
+        bPickNone.FlatAppearance.BorderSize = 0; bPickNone.BackColor = Theme.CardBg; bPickNone.ForeColor = Theme.Accent;
+        bPickNone.Click += (_, _) => SetAllDocs(false);
+        var lblPick = Ui.Caption("вибери джерело → «Оглянути» → познач документи", 516, 12, 460);
+        docsBar.Controls.Add(_btnPreview); docsBar.Controls.Add(_btnFetchPicked);
+        docsBar.Controls.Add(bPickAll); docsBar.Controls.Add(bPickNone); docsBar.Controls.Add(lblPick);
         _lblDocsTitle = Ui.Caption("Документи — усе", 0, 0, 600);
         _lblDocsTitle.Dock = DockStyle.Top;
         _lblDocsTitle.Height = 20;
@@ -609,6 +628,22 @@ internal sealed class MainForm : ThemedForm
 
     private int SinceYearValue() =>
         int.TryParse(_txtSince.Text.Trim(), out var y) && y >= 1990 && y <= 2035 ? y : 2022;
+
+    private void SetAllSources(bool on)
+    {
+        _tree.AfterCheck -= TreeAfterCheck;
+        foreach (var n in _nodes.Values) if (n.Tag != null) n.Checked = on;
+        _tree.AfterCheck += TreeAfterCheck;
+        UpdateRunLabel();
+    }
+
+    private void SetAllDocs(bool on)
+    {
+        _docs.BeginUpdate();
+        foreach (ListViewItem it in _docs.Items) if (it.Tag is DocRef) it.Checked = on;
+        _docs.EndUpdate();
+        _lblDocsCount.Text = _docs.Items.Cast<ListViewItem>().Count(i => i.Checked) + " позначено";
+    }
 
     private int CountChecked() => _nodes.Values.Count(n => n.Tag != null && n.Checked);
 
