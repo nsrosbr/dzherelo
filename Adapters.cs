@@ -289,8 +289,13 @@ public static class Adapters
             }
         }
 
-        var pdfs = links.Where(IsPdfUrl).Where(l => Match(s, l)).Distinct().ToList();
-        foreach (var p in pdfs.Take(MaxDocs)) yield return new DocRef(p, "", "", false);
+        static bool IsRealPdf(string l) =>
+            IsPdfUrl(l) || (l.Contains("/bitstreams/", StringComparison.OrdinalIgnoreCase)
+                            && l.Contains("/download", StringComparison.OrdinalIgnoreCase));
+
+        var pdfs = links.Where(IsRealPdf).Where(l => Match(s, l)).Distinct().ToList();
+        // назва сторінки = назва документа (DSpace: bitstream без імені)
+        foreach (var p in pdfs.Take(MaxDocs)) yield return new DocRef(p, pdfs.Count == 1 ? pageTitle : "", "", false);
 
         // A single article page (BNTU handle, Engineer magazine, The Cove) is itself the
         // document; a listing page is not, so it is only yielded when it has no PDFs.
@@ -311,6 +316,11 @@ public static class Adapters
             if (!Uri.TryCreate(l, UriKind.Absolute, out var linkUri)
                 || !BareHost(linkUri).Equals(pageHost, StringComparison.OrdinalIgnoreCase)) continue;
             if (l.Contains("/cdn-cgi/", StringComparison.OrdinalIgnoreCase)) continue; // CF email obfuscation
+            // DSpace: /home, /community-list, /search, /login, /browse, /collections — це навігація, не документи
+            if (Regex.IsMatch(Uri.TryCreate(l, UriKind.Absolute, out var nav) ? nav.AbsolutePath : l,
+                              @"^/(home|community-list|search|login|browse|collections|statistics|password-login)(/|$)",
+                              RegexOptions.IgnoreCase)) continue;
+            if (l.Contains("/server/api/", StringComparison.OrdinalIgnoreCase)) continue;
             if (Uri.TryCreate(l, UriKind.Absolute, out var lu) && lu.AbsolutePath.Trim('/').Length == 0) continue;
             if (l.Contains("/bitstreams/", StringComparison.OrdinalIgnoreCase)
                 || l.Contains("/signposting/", StringComparison.OrdinalIgnoreCase)

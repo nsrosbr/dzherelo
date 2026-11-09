@@ -1091,8 +1091,8 @@
       "url": "https://rep.bntu.by/handle/data/150860",
       "lang": "ru",
       "rps": 1,
-      "depth": 1,
-      "maxPages": 40,
+      "depth": 0,
+      "maxPages": 1,
       "keepHtml": false,
       "manual": false,
       "taxonomy": "=books"
@@ -1105,8 +1105,8 @@
       "url": "https://rep.bntu.by/handle/data/144260",
       "lang": "ru",
       "rps": 1,
-      "depth": 1,
-      "maxPages": 40,
+      "depth": 0,
+      "maxPages": 1,
       "keepHtml": false,
       "manual": false,
       "taxonomy": "=books"
@@ -1119,8 +1119,8 @@
       "url": "https://rep.bntu.by/handle/data/144263",
       "lang": "ru",
       "rps": 1,
-      "depth": 1,
-      "maxPages": 40,
+      "depth": 0,
+      "maxPages": 1,
       "keepHtml": false,
       "manual": false,
       "taxonomy": "=books"
