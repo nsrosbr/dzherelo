@@ -33,5 +33,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="assets\dzherelo-1024.png" LogicalName="dzherelo_mark" />
+    <EmbeddedResource Include="assets\author.png" LogicalName="authorphoto" />
+    <EmbeddedResource Include="assets\author_dark.png" LogicalName="authorphoto_dark" />
   </ItemGroup>
 </Project>

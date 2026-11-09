@@ -98,16 +98,18 @@ internal sealed class AboutForm : ThemedForm
     private static Panel Sep(int x, int y, int w) =>
         new() { Left = x, Top = y, Width = w, Height = 1, BackColor = Theme.CardBorder };
 
-    // Знак застосунку з вбудованого ресурсу (assets\dzherelo-1024.png).
+    // Фото автора, як у Valera: темна тема — з рамкою, світла — розчиняється у фоні.
     private static Image? LoadMark()
     {
         try
         {
             var asm = Assembly.GetExecutingAssembly();
-            using var s = asm.GetManifestResourceStream("dzherelo_mark");
-            if (s == null) return null;
-            using var tmp = Image.FromStream(s);
-            return new Bitmap(tmp);
+            var stream = Theme.IsDark ? asm.GetManifestResourceStream("authorphoto_dark") : null;
+            stream ??= asm.GetManifestResourceStream("authorphoto");
+            if (stream == null) return null;
+            using (stream)
+            using (var tmp = Image.FromStream(stream))
+                return new Bitmap(tmp);
         }
         catch { return null; }
     }
