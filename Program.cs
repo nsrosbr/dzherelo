@@ -71,7 +71,7 @@ internal static class Program
         if (args.Length > 0 && (args[0].StartsWith("--") || args[0].StartsWith("/")))
         {
             string[] known = { "--setup", "--install", "--uninstall", "--selftest", "--collect", "--list",
-                               "--relayout", "--probe", "--reindex", "--revert-adapter", "--topics", "--canon", "--help", "-h", "/?", "--set-secret", "--get-secret-check", "--secret-b64", "--update", "--check", "--force", "--about", "--preview", "--models", "--judge", "--model", "--fetch" };
+                               "--relayout", "--probe", "--reindex", "--revert-adapter", "--topics", "--canon", "--help", "-h", "/?", "--set-secret", "--get-secret-check", "--secret-b64", "--update", "--check", "--force", "--about", "--preview", "--models", "--judge", "--model", "--fetch", "--import" };
             if (!known.Contains(args[0], StringComparer.OrdinalIgnoreCase))
             {
                 AttachConsole(-1);
@@ -153,6 +153,26 @@ internal static class Program
                 Console.WriteLine($"  ✓ {d.Title} → {j.Type} / {(d.Topic.Length == 0 ? "—" : d.Topic)} / {j.Lang} (впевненість {j.Confidence:0.00})");
             }
             Console.WriteLine("застосовано: " + ok);
+            return 0;
+        }
+
+        // Підключити наявну теку: індексуємо на місці, без копіювання
+        if (args.Any(a => a.Equals("--import", StringComparison.OrdinalIgnoreCase)))
+        {
+            var ii = Array.FindIndex(args, a => a.Equals("--import", StringComparison.OrdinalIgnoreCase));
+            if (ii < 0 || ii + 1 >= args.Length) { Console.WriteLine("--import <тека> [--out <бібліотека>]"); return 2; }
+            var folder = args[ii + 1];
+            if (!Directory.Exists(folder)) { Console.WriteLine("немає теки: " + folder); return 2; }
+
+            var oi2 = Array.FindIndex(args, a => a.Equals("--out", StringComparison.OrdinalIgnoreCase));
+            var root = oi2 >= 0 && oi2 + 1 < args.Length ? Path.GetFullPath(args[oi2 + 1]) : App.Root(null);
+            Directory.CreateDirectory(root);
+            using var cat = new Catalog(root);
+            Console.WriteLine("імпорт: " + folder + " → " + root);
+            var res = ImportInPlace.Run(folder, cat, (seen, added, known) =>
+                Console.WriteLine($"  {seen} оброблено · нових {added} · уже було {known}"), default);
+            Console.WriteLine($"готово: нових {res.Added}, уже в каталозі {res.Known}, відсіяно {res.Skipped}");
+            foreach (var e in res.Errors.Take(5)) Console.WriteLine("  ! " + e);
             return 0;
         }
 

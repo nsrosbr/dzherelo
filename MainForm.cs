@@ -29,7 +29,7 @@ internal sealed class MainForm : ThemedForm
     private ListView _docs = null!;
     private CheckBox _onlySel = null!;
     private Label _lblDocsCount = null!, _lblDocsTitle = null!;
-    private Button _btnPreview = null!, _btnFetchPicked = null!, _btnJudge = null!;
+    private Button _btnPreview = null!, _btnFetchPicked = null!, _btnJudge = null!, _btnImport = null!;
     private readonly System.Windows.Forms.Timer _tick = new() { Interval = 1000 };
     private DateTime _opStarted;
     private string _opTitle = "";
@@ -231,6 +231,9 @@ internal sealed class MainForm : ThemedForm
         _btnFetchPicked = new Button { Text = "Завантажити позначені", Width = 200, Margin = new Padding(0, 0, 8, 0) };
         Ui.StylePrimary(_btnFetchPicked);
         _btnFetchPicked.Click += async (_, _) => await FetchPickedAsync();
+        _btnImport = new Button { Text = "Імпорт теки…", Width = 140, Margin = new Padding(0, 0, 8, 0) };
+        Ui.StyleSecondary(_btnImport);
+        _btnImport.Click += async (_, _) => await ImportFolderAsync();
         _btnJudge = new Button { Text = "Судження", Width = 120, Margin = new Padding(0, 0, 8, 0) };
         Ui.StyleSecondary(_btnJudge);
         _btnJudge.Click += async (_, _) => await JudgeLibraryAsync();
@@ -242,7 +245,7 @@ internal sealed class MainForm : ThemedForm
         bPickNone.Click += (_, _) => SetAllDocs(false);
         var lblPick = Ui.Caption("вибери джерело → «Оглянути» → познач документи", 0, 12, 460);
         lblPick.Margin = new Padding(0, 12, 0, 0);
-        docsBar.Controls.Add(_btnPreview); docsBar.Controls.Add(_btnFetchPicked); docsBar.Controls.Add(_btnJudge);
+        docsBar.Controls.Add(_btnPreview); docsBar.Controls.Add(_btnFetchPicked); docsBar.Controls.Add(_btnJudge); docsBar.Controls.Add(_btnImport);
         docsBar.Controls.Add(bPickAll); docsBar.Controls.Add(bPickNone); docsBar.Controls.Add(lblPick);
         _lblDocsTitle = Ui.Caption("Документи — усе", 0, 0, 600);
         _lblDocsTitle.Dock = DockStyle.Top;
@@ -657,6 +660,58 @@ internal sealed class MainForm : ThemedForm
     {
         _tick.Stop();
         _tick.Tick -= OnTick;
+    }
+
+    // Підключити вже наявну теку з документами: sha-дедуп, перевірка формату, каталог.
+    private async Task ImportFolderAsync()
+    {
+        if (_running) { Ui.Msg("Спочатку дочекайся кінця поточної операції.", Ui.Name, MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
+        using var dlg = new FolderBrowserDialog { Description = "Тека з документами для імпорту" };
+        if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+        var root = _txtOut.Text.Trim();
+        if (root.Length == 0) { Ui.Msg("Вкажи теку бібліотеки.", Ui.Name, MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
+        Directory.CreateDirectory(root);
+
+        var files = Directory.EnumerateFiles(dlg.SelectedPath, "*", SearchOption.AllDirectories)
+            .Where(f => f.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase)
+                        || f.EndsWith(".djvu", StringComparison.OrdinalIgnoreCase)
+                        || f.EndsWith(".docx", StringComparison.OrdinalIgnoreCase)).ToList();
+        if (files.Count == 0) { Ui.Msg("У теці немає pdf/djvu/docx.", Ui.Name, MessageBoxButtons.OK, MessageBoxIcon.Information); return; }
+
+        var go = Ui.Msg("Знайдено файлів: " + files.Count + ".\nЗаписати в каталог без копіювання (файли лишаться на місці)?",
+            Ui.Name, MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+        if (go != DialogResult.Yes) return;
+
+        _running = true; _btnImport.Enabled = false; _btnStop.Enabled = true;
+        _cts = new CancellationTokenSource();
+        StartTicker("Імпорт теки: 0 / " + files.Count);
+        _prog.Minimum = 0; _prog.Maximum = files.Count; _prog.Value = 0;
+        int added = 0, known = 0, bad = 0;
+        try
+        {
+            using var store = new Catalog(root);
+            var result = await Task.Run(() => ImportInPlace.Run(dlg.SelectedPath, store, (seen, a, k) =>
+            {
+                RunOnUi(() =>
+                {
+                    _prog.Value = Math.Min(seen, _prog.Maximum);
+                    _lblDocsTitle.Text = $"Імпорт: {seen} / {files.Count} · нових {a}, вже було {k}";
+                });
+            }, _cts.Token), _cts.Token);
+            added = result.Added; known = result.Known; bad = result.Skipped;
+
+            _prog.Value = _prog.Maximum;
+            Ui.Msg("Імпорт завершено.\nНових: " + added + "\nУже було в каталозі: " + known + "\nВідсіяно: " + bad,
+                Ui.Name, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            _lblState.Text = CountCollection();
+        }
+        catch (OperationCanceledException) { Log("Імпорт зупинено."); }
+        catch (Exception ex) { Ui.Msg("Імпорт упав: " + ex.Message, Ui.Name, MessageBoxButtons.OK, MessageBoxIcon.Error); }
+        finally
+        {
+            StopTicker(); _running = false; _btnImport.Enabled = true; _btnStop.Enabled = false; _prog.Value = 0;
+        }
     }
 
     private static string ShortTitle(string s) => s.Length <= 46 ? s : s[..46] + "…";

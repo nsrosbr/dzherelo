@@ -346,7 +346,7 @@ public sealed class Harvester
         Log("  + canon " + Short(d.Url) + " (" + (new FileInfo(pdfPath).Length / 1024) + " КБ)");
     }
 
-    private static async Task<string> ShaOfAsync(string path, CancellationToken ct)
+    public static async Task<string> ShaOfAsync(string path, CancellationToken ct)
     {
         await using var fs = File.OpenRead(path);
         var h = await System.Security.Cryptography.SHA256.HashDataAsync(fs, ct);
