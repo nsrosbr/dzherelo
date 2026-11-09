@@ -95,6 +95,43 @@ internal sealed class AboutForm : ThemedForm
         try { Directory.CreateDirectory(dir); System.Diagnostics.Process.Start("explorer.exe", dir); } catch { }
     }
 
+    // М'який край: альфа плавно спадає до 0 біля рамки, тому фото «розчиняється» у фоні
+    // в обох темах, а не тільки у світлій (там це вшите у файл).
+    private static Bitmap Feather(Bitmap src, int px)
+    {
+        var dst = new Bitmap(src.Width, src.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        using var g = Graphics.FromImage(dst);
+        g.DrawImage(src, 0, 0, src.Width, src.Height);
+        src.Dispose();
+
+        var data = dst.LockBits(new Rectangle(0, 0, dst.Width, dst.Height),
+            System.Drawing.Imaging.ImageLockMode.ReadWrite, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        try
+        {
+            int n = data.Width * data.Height;
+            var buf = new byte[n * 4];
+            System.Runtime.InteropServices.Marshal.Copy(data.Scan0, buf, 0, buf.Length);
+            int w = data.Width, h = data.Height;
+            for (int y = 0; y < h; y++)
+            {
+                int dy = Math.Min(y, h - 1 - y);
+                for (int x = 0; x < w; x++)
+                {
+                    int dx = Math.Min(x, w - 1 - x);
+                    int d = Math.Min(dx, dy);
+                    if (d >= px) continue;
+                    // smoothstep: без різкого сходинки на краю
+                    double k = (double)d / px;
+                    double f = k * k * (3 - 2 * k);
+                    buf[(y * w + x) * 4 + 3] = (byte)(buf[(y * w + x) * 4 + 3] * f);
+                }
+            }
+            System.Runtime.InteropServices.Marshal.Copy(buf, 0, data.Scan0, buf.Length);
+        }
+        finally { dst.UnlockBits(data); }
+        return dst;
+    }
+
     private static Panel Sep(int x, int y, int w) =>
         new() { Left = x, Top = y, Width = w, Height = 1, BackColor = Theme.CardBorder };
 
@@ -109,7 +146,7 @@ internal sealed class AboutForm : ThemedForm
             if (stream == null) return null;
             using (stream)
             using (var tmp = Image.FromStream(stream))
-                return new Bitmap(tmp);
+                return Feather(new Bitmap(tmp), 18);
         }
         catch { return null; }
     }
