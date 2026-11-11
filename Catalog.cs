@@ -177,6 +177,8 @@ public sealed class Catalog : IDisposable
         d.TrustLevel = Str(o, "trust_level");
         d.LicenseClaim = Str(o, "license_claim");
         d.Run = Str(o, "run");
+        if (o["date"] is JsonNode dt && dt.GetValueKind() == JsonValueKind.String) d.Date = dt.GetValue<string>() ?? "";
+        if (o["section"] is JsonNode sec && sec.GetValueKind() == JsonValueKind.String) d.Section = sec.GetValue<string>() ?? "";
         if (o["years"] is JsonNode y && y.GetValueKind() == JsonValueKind.Number) d.Year = y.GetValue<int>();
         if (o["topic"] is JsonArray ta && ta.Count > 0) d.Topic = ta[0]?.ToString() ?? "";
         if (o["subject_path"] is JsonArray sa) foreach (var t in sa) if (t is not null) d.SubjectPath.Add(t.ToString());
@@ -221,14 +223,31 @@ public sealed class Catalog : IDisposable
     public string DirFor(string source, string? type, string? date) =>
         Naming.Dir(Library, source, type, date);
 
+    // Рев'ю 2026-11-11: зрізаний query злипав download?id=1 і ?id=2 в один документ,
+    // а ToLowerInvariant() ламав регістрозалежні шляхи. Тепер: query лишаємо (крім трекінгу),
+    // нижній регістр — лише схема й хост.
     public static string Canonical(string url)
     {
         if (string.IsNullOrWhiteSpace(url)) return "";
-        var u = url.Trim();
-        int q = u.IndexOf('?');
-        if (q >= 0) u = u[..q];
-        if (u.EndsWith('/')) u = u.TrimEnd('/');
-        return u.ToLowerInvariant();
+        var raw = url.Trim();
+        if (!Uri.TryCreate(raw, UriKind.Absolute, out var u)) return raw;
+
+        var query = u.Query.TrimStart('?');
+        if (query.Length > 0)
+        {
+            static bool Tracking(string kv) =>
+                kv.StartsWith("utm_", StringComparison.OrdinalIgnoreCase) ||
+                kv.StartsWith("fbclid=", StringComparison.OrdinalIgnoreCase) ||
+                kv.StartsWith("gclid=", StringComparison.OrdinalIgnoreCase) ||
+                kv.StartsWith("ref=", StringComparison.OrdinalIgnoreCase) ||
+                kv.StartsWith("_ga=", StringComparison.OrdinalIgnoreCase);
+
+            var kept = query.Split('&', StringSplitOptions.RemoveEmptyEntries).Where(kv => !Tracking(kv)).ToList();
+            query = kept.Count > 0 ? "?" + string.Join("&", kept) : "";
+        }
+
+        // регістр лишаємо нечутливим, як було: інакше наявні записи перестануть знаходитись
+        return (u.Scheme + "://" + u.Host + u.AbsolutePath.TrimEnd('/') + query).ToLowerInvariant();
     }
 
     // ---------- запис ----------
@@ -293,6 +312,8 @@ public sealed class Catalog : IDisposable
         o["title_latin"] = d.Title;
         o["orig_name"] = d.OrigName;
         o["lang"] = d.Lang;
+        o["date"] = d.Date;
+        o["section"] = d.Section;
         o["library"] = d.Source;
         o["type"] = d.Type;
         o["type_source"] = d.TypeSource;

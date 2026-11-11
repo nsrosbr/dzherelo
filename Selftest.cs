@@ -9,6 +9,30 @@ public static class Selftest
 
     /// <summary>Головне вікно будується, тема перемикається dark→light, кожен контрол мусить
     /// взяти колір поточної палітри (жодних залишків попередньої).</summary>
+    // Рев'ю 2026-11-11: ToJson не писав date/section, FromJson їх не читав — дані губились.
+    private static bool CatalogRoundTripKeepsDateAndSection()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dzherelo-selftest-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(dir, "library"));
+            using (var cat = new Catalog(Path.Combine(dir, "library")))
+            {
+                cat.Add(new DocRecord
+                {
+                    Url = "https://example.org/x.pdf", Sha = new string('a', 64), Size = 10,
+                    Path = "x/y.pdf", Title = "Проба", Date = "2023-05-17", Section = "Уроки війни",
+                    Type = "report", Topic = "lohistyka", Lang = "uk", Source = "тест", Status = "ok",
+                });
+            }
+            using var again = new Catalog(Path.Combine(dir, "library"));
+            var d = again.All().FirstOrDefault();
+            return d is not null && d.Date == "2023-05-17" && d.Section == "Уроки війни";
+        }
+        catch { return false; }
+        finally { try { Directory.Delete(dir, true); } catch { } }
+    }
+
     private static bool UiThemeConsistent()
     {
         bool ok = true;
@@ -63,6 +87,7 @@ public static class Selftest
         try { Console.OutputEncoding = Encoding.UTF8; } catch { }
         var report = new StringBuilder();
         Check("UI: перемикання теми дає один набір кольорів", UiThemeConsistent());
+        Check("каталог: date і section переживають перезавантаження", CatalogRoundTripKeepsDateAndSection());
 
         void Log(string s) { try { Console.WriteLine(s); } catch { } report.AppendLine(s); }
         void Check(string name, bool ok, string detail = "")

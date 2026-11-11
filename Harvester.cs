@@ -313,11 +313,16 @@ public sealed class Harvester
             Log("  ! канон-pdf: " + ex.Message + " — лишаю чистий HTML");
             var raw = Path.Combine(dir, name + ".source.html");
             if (!File.Exists(raw)) await File.WriteAllTextAsync(raw, html, Encoding.UTF8, ct);
+            // Каталог не приймає запис без sha256: рахуємо його від самого HTML,
+            // інакше Add кидав, джерело падало, а файл лишався сиротою.
+            var htmlBytes = Encoding.UTF8.GetBytes(html);
+            var htmlSha = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(htmlBytes)).ToLowerInvariant();
             store.Add(new DocRecord
             {
-                Url = d.Url, Path = Path.GetRelativePath(store.Library, raw), Size = Encoding.UTF8.GetByteCount(html),
+                Url = d.Url, PageUrl = d.Url, Sha = htmlSha,
+                Path = Path.GetRelativePath(store.Library, raw), Size = htmlBytes.Length,
                 Title = title, Date = date, Type = type, Topic = topic, Lang = s.Lang, Source = s.Name, Section = s.Section,
-                Status = "html", Run = RunId,
+                Status = "html", Run = RunId, Magic = "HTML", Mime = "text/html", TrustLevel = "L3",
             });
             r.Html++;
             Log("  + html " + Short(d.Url));
@@ -457,8 +462,12 @@ public sealed class Harvester
             // Delete only a copy that landed somewhere new. With --force the file is
             // re-downloaded over the same path, and deleting it would empty the library.
             var known = store.BySha(saved.Sha);
-            var samePath = known != null && string.Equals(
-                Path.GetFullPath(known.Path), Path.GetFullPath(saved.Path), StringComparison.OrdinalIgnoreCase);
+            // known.Path у каталозі відносний до бібліотеки: без Combine він резолвився від CWD,
+            // тому «той самий файл» ніколи не збігався і --force видаляв файл бібліотеки.
+            var knownFull = known == null ? null
+                : Path.IsPathRooted(known.Path) ? Path.GetFullPath(known.Path)
+                : Path.GetFullPath(Path.Combine(store.Library, known.Path));
+            var samePath = knownFull != null && string.Equals(knownFull, Path.GetFullPath(saved.Path), StringComparison.OrdinalIgnoreCase);
             if (!samePath) { try { File.Delete(saved.Path); } catch { } }
             r.Duplicates++;
             Log("  = дубль " + Short(targetUrl));

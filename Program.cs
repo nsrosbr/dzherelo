@@ -71,7 +71,7 @@ internal static class Program
         if (args.Length > 0 && (args[0].StartsWith("--") || args[0].StartsWith("/")))
         {
             string[] known = { "--setup", "--install", "--uninstall", "--selftest", "--collect", "--list",
-                               "--relayout", "--probe", "--reindex", "--revert-adapter", "--topics", "--canon", "--help", "-h", "/?", "--set-secret", "--get-secret-check", "--secret-b64", "--update", "--check", "--force", "--about", "--preview", "--models", "--judge", "--model", "--fetch", "--import" };
+                               "--relayout", "--probe", "--reindex", "--revert-adapter", "--topics", "--canon", "--help", "-h", "/?", "--set-secret", "--get-secret-check", "--secret-b64", "--update", "--check", "--force", "--about", "--preview", "--models", "--judge", "--model", "--fetch", "--import", "--judge-all", "--review-kimi" };
             if (!known.Contains(args[0], StringComparer.OrdinalIgnoreCase))
             {
                 AttachConsole(-1);
@@ -129,6 +129,33 @@ internal static class Program
             Console.WriteLine(Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(v)));
             return 0;
         }
+        if (args.Any(a => a.Equals("--review-kimi", StringComparison.OrdinalIgnoreCase)))
+        {
+            var ri = Array.FindIndex(args, a => a.Equals("--model", StringComparison.OrdinalIgnoreCase));
+            var rmodel = ri >= 0 && ri + 1 < args.Length ? args[ri + 1] : "moonshotai/kimi-k3.1-pro";
+            var outFile = Path.Combine("_plan", "review-kimi.md");
+            return CodeReview.Run(Directory.GetCurrentDirectory(), rmodel, Path.GetFullPath(outFile), Console.WriteLine, default);
+        }
+
+        if (args.Any(a => a.Equals("--judge-all", StringComparison.OrdinalIgnoreCase)))
+        {
+            if (!Judge.Ready) { Console.WriteLine("немає ключа OpenRouter"); return 2; }
+            var cfgAll = AppSettings.Load();
+            var mi2 = Array.FindIndex(args, a => a.Equals("--model", StringComparison.OrdinalIgnoreCase));
+            var modelAll = mi2 >= 0 && mi2 + 1 < args.Length ? args[mi2 + 1] : cfgAll.Model;
+            if (string.IsNullOrWhiteSpace(modelAll)) { Console.WriteLine("не вибрана модель"); return 2; }
+
+            var li = Array.FindIndex(args, a => a.Equals("--limit", StringComparison.OrdinalIgnoreCase));
+            var limitAll = li >= 0 && li + 1 < args.Length && int.TryParse(args[li + 1], out var lim) ? lim : 0;
+
+            var rootAll = App.Root(null);
+            using var catAll = new Catalog(rootAll);
+            var stateAll = Path.Combine(rootAll, "state", "judge-state.jsonl");
+            Console.WriteLine($"модель: {modelAll} | стан: {stateAll}");
+            return Judge.RunAll(catAll, stateAll, modelAll, limitAll,
+                s => Console.WriteLine(s), null, default);
+        }
+
         if (args.Any(a => a.Equals("--judge", StringComparison.OrdinalIgnoreCase)))
         {
             var cfg = AppSettings.Load();

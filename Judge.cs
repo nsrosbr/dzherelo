@@ -18,6 +18,8 @@ public static class Judge
     public static string[] TopicIds =>
         Topics.Default().Select(t => t.Id).Append("none").ToArray();
 
+    public static long TokensIn, TokensOut;
+
     private static string? Key => Secrets.Get("openrouter.key");
 
     public static bool Ready => !string.IsNullOrWhiteSpace(Key);
@@ -51,6 +53,102 @@ public static class Judge
         return new Judgement(Top(v => v.Type), Top(v => v.Topic), Top(v => v.Lang),
             votes.Average(v => v.Confidence), model);
     }
+
+
+    /// <summary>
+    /// Пакетний прогін суджень із станом на диску: обрив мережі чи зупинка не коштують уже зробленого.
+    /// </summary>
+    public static int RunAll(Catalog store, string statePath, string model, int limit,
+        Action<string> log, Action<int, int>? progress, CancellationToken ct)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(statePath)!);
+        var done = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (File.Exists(statePath))
+            foreach (var line in File.ReadAllLines(statePath))
+            {
+                if (string.IsNullOrWhiteSpace(line)) continue;
+                try
+                {
+                    using var d = JsonDocument.Parse(line);
+                    if (d.RootElement.TryGetProperty("ok", out var wasOk) && wasOk.GetBoolean()
+                        && d.RootElement.TryGetProperty("sha", out var sha))
+                        done.Add(sha.GetString() ?? "");
+                }
+                catch { }
+            }
+
+        var todo = store.All()
+            .Where(d => (d.Type is null or "" or "other") || string.IsNullOrWhiteSpace(d.Topic))
+            .Where(d => !done.Contains(d.Key))
+            .Take(limit <= 0 ? int.MaxValue : limit)
+            .ToList();
+
+        log($"до обробки: {todo.Count} (уже зроблено раніше: {done.Count})");
+        int ok = 0, failed = 0, streak = 0, cycle = 0;
+
+        using var stateFile = new StreamWriter(statePath, append: true) { AutoFlush = true };
+        void Mark(string sha, bool success, int attempts, string why)
+            => stateFile.WriteLine(JsonSerializer.Serialize(new
+            {
+                sha, ok = success, model, ts = DateTime.UtcNow.ToString("o"), attempts, why
+            }));
+
+        for (int i = 0; i < todo.Count; i++)
+        {
+            ct.ThrowIfCancellationRequested();
+            var doc = todo[i];
+            var name = string.IsNullOrWhiteSpace(doc.Title) ? Path.GetFileNameWithoutExtension(doc.Path) : doc.Title;
+            Judgement? j = null;
+            int attempt = 0;
+            string why = "";
+
+            while (attempt < 3 && j == null)
+            {
+                attempt++;
+                try { j = ClassifyAsync(model, name, doc.Path, ct).GetAwaiter().GetResult(); }
+                catch (Exception ex) { why = ex.Message; }
+                if (j == null && attempt < 3)
+                {
+                    var pause = attempt == 1 ? 2000 : 10000;
+                    Thread.Sleep(pause);
+                }
+            }
+
+            if (j != null)
+            {
+                doc.Type = j.Type;
+                doc.Topic = j.Topic == "none" ? "" : j.Topic;
+                doc.Lang = j.Lang;
+                store.Add(doc);
+                Mark(doc.Key, true, attempt, "");
+                ok++; streak = 0;
+                log($"  ✓ [{i + 1}/{todo.Count}] {Short(name)} → {j.Type} / {(doc.Topic.Length == 0 ? "—" : doc.Topic)} / {j.Lang}");
+            }
+            else
+            {
+                Mark(doc.Key, false, attempt, why);
+                failed++; streak++;
+                log($"  ? [{i + 1}/{todo.Count}] {Short(name)} — {why}");
+
+                // мережа сиплеться: робимо паузу й пробуємо цикл, але не вічно
+                if (streak >= 10)
+                {
+                    cycle++;
+                    if (cycle >= 3) { log("мережа не відновлюється — зупиняюсь, стан збережено"); return 3; }
+                    log($"  10 підряд невдач — пауза 60 с (цикл {cycle}/3)");
+                    Thread.Sleep(60_000);
+                    streak = 0;
+                }
+            }
+
+            progress?.Invoke(i + 1, todo.Count);
+        }
+
+        log($"готово: успішно {ok}, невдач {failed} | токенів: вхід {TokensIn:N0}, вихід {TokensOut:N0}");
+        return failed > 0 ? 1 : 0;
+    }
+
+    private static string Short(string s) => s.Length <= 60 ? s : s[..60] + "…";
 
     private static async Task<Judgement?> OnceAsync(string model, string title, string hint, CancellationToken ct)
     {
@@ -105,6 +203,11 @@ public static class Judge
         using var resp = await Http.SendAsync(req, ct);
         if (!resp.IsSuccessStatusCode) return null;
         using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
+        if (doc.RootElement.TryGetProperty("usage", out var usage))
+        {
+            if (usage.TryGetProperty("prompt_tokens", out var pi)) Interlocked.Add(ref TokensIn, pi.GetInt64());
+            if (usage.TryGetProperty("completion_tokens", out var co)) Interlocked.Add(ref TokensOut, co.GetInt64());
+        }
         var content = doc.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString();
         if (string.IsNullOrWhiteSpace(content)) return null;
         try
