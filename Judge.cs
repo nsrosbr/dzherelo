@@ -116,7 +116,14 @@ public static class Judge
                 if (j != null)
                 {
                     doc.Type = j.Type;
-                    doc.Topic = j.Topic == "none" ? "" : j.Topic;
+                    // гнучка таксономія: вільна мітка → канон, інакше кандидат у файл
+                    if (j.Topic is "none" or "" or null) doc.Topic = "";
+                    else
+                    {
+                        var resolved = TopicTaxonomy.Resolve(store.Root, j.Topic);
+                        if (resolved == null) { TopicTaxonomy.AddCandidate(store.Root, j.Topic, doc.Key); doc.Topic = ""; }
+                        else doc.Topic = resolved;
+                    }
                     doc.Lang = j.Lang;
                     lock (stateLock) store.Add(doc);      // каталог уже з власним локом, але тримаємо порядок
                     Mark(doc.Key, true, attempt, "");
@@ -150,7 +157,12 @@ public static class Judge
             ["properties"] = new JsonObject
             {
                 ["type"] = new JsonObject { ["type"] = "string", ["enum"] = new JsonArray(Types.Select(t => (JsonNode)t!).ToArray()) },
-                ["topic"] = new JsonObject { ["type"] = "string", ["enum"] = new JsonArray(TopicIds.Select(t => (JsonNode)t!).ToArray()) },
+                ["topic"] = new JsonObject
+                {
+                    ["type"] = "string",
+                    ["maxLength"] = 40,
+                    ["description"] = "коротка тема українською, 1–3 слова (напр. 'логістика', 'підготовка офіцерів'); 'none' якщо тема не визначається",
+                },
                 ["lang"] = new JsonObject { ["type"] = "string", ["enum"] = new JsonArray("uk", "ru", "en", "other") },
                 ["confidence"] = new JsonObject { ["type"] = "number" },
             },
@@ -170,7 +182,7 @@ public static class Judge
                     ["content"] = "Ти класифікуєш військові документи. Відповідай ЛИШЕ JSON за схемою. " +
                                   "type: doctrine (статут/доктрина), lessons (уроки війни), journal (журнал/збірник), " +
                                   "report (звіт/дослідження), book, manual (посібник), other. " +
-                                  "topic — один id із переліку, або none. lang — мова документа.",
+                                  "topic — коротка тема українською у 1–3 словах (не з жорсткого списку), або none. lang — мова документа.",
                 },
                 new JsonObject
                 {

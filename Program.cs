@@ -71,7 +71,7 @@ internal static class Program
         if (args.Length > 0 && (args[0].StartsWith("--") || args[0].StartsWith("/")))
         {
             string[] known = { "--setup", "--install", "--uninstall", "--selftest", "--collect", "--list",
-                               "--relayout", "--probe", "--reindex", "--revert-adapter", "--topics", "--canon", "--help", "-h", "/?", "--set-secret", "--get-secret-check", "--secret-b64", "--update", "--check", "--force", "--about", "--preview", "--models", "--judge", "--model", "--fetch", "--import", "--judge-all", "--review-kimi", "--parallel", "--runs", "--limit", "--backfill-date" };
+                               "--relayout", "--probe", "--reindex", "--revert-adapter", "--topics", "--canon", "--help", "-h", "/?", "--set-secret", "--get-secret-check", "--secret-b64", "--update", "--check", "--force", "--about", "--preview", "--models", "--judge", "--model", "--fetch", "--import", "--judge-all", "--review-kimi", "--parallel", "--runs", "--limit", "--backfill-date", "--state", "--topics-candidates", "--topics-promote" };
             if (!known.Contains(args[0], StringComparer.OrdinalIgnoreCase))
             {
                 AttachConsole(-1);
@@ -137,6 +137,34 @@ internal static class Program
             return filled > 0 ? 0 : 1;
         }
 
+        if (args.Any(a => a.Equals("--topics-promote", StringComparison.OrdinalIgnoreCase)))
+        {
+            var pi = Array.FindIndex(args, a => a.Equals("--topics-promote", StringComparison.OrdinalIgnoreCase));
+            if (pi < 0 || pi + 1 >= args.Length) { Console.WriteLine("--topics-promote \"мітка=id:Назва\""); return 2; }
+            var spec = args[pi + 1];
+            var eq = spec.IndexOf('=');
+            if (eq < 1) { Console.WriteLine("формат: мітка=id:Назва"); return 2; }
+            var label = spec[..eq].Trim();
+            var rest = spec[(eq + 1)..];
+            var colon = rest.IndexOf(':');
+            var id = colon > 0 ? rest[..colon].Trim() : rest.Trim();
+            var name = colon > 0 ? rest[(colon + 1)..].Trim() : label;
+
+            var proot = App.Root(null);
+            using var pstore = new Catalog(proot);
+            TopicTaxonomy.Promote(proot, label, id, name, pstore, Console.WriteLine);
+            return 0;
+        }
+
+        if (args.Any(a => a.Equals("--topics-candidates", StringComparison.OrdinalIgnoreCase)))
+        {
+            var croot = App.Root(null);
+            var cands = TopicTaxonomy.Candidates(croot, 2);
+            Console.WriteLine("теми-кандидати (≥2 документа): " + cands.Count);
+            foreach (var (label, count) in cands.Take(40)) Console.WriteLine($"  {count,4}  {label}");
+            return 0;
+        }
+
         if (args.Any(a => a.Equals("--review-kimi", StringComparison.OrdinalIgnoreCase)))
         {
             var ri = Array.FindIndex(args, a => a.Equals("--model", StringComparison.OrdinalIgnoreCase));
@@ -158,7 +186,11 @@ internal static class Program
 
             var rootAll = App.Root(null);
             using var catAll = new Catalog(rootAll);
-            var stateAll = Path.Combine(rootAll, "state", "judge-state.jsonl");
+            TopicTaxonomy.EnsureFile(rootAll);
+            var si = Array.FindIndex(args, a => a.Equals("--state", StringComparison.OrdinalIgnoreCase));
+            var stateAll = si >= 0 && si + 1 < args.Length
+                ? Path.GetFullPath(args[si + 1])
+                : Path.Combine(rootAll, "state", "judge-state.jsonl");
             Console.WriteLine($"модель: {modelAll} | стан: {stateAll}");
             var pi = Array.FindIndex(args, a => a.Equals("--parallel", StringComparison.OrdinalIgnoreCase));
             var par = pi >= 0 && pi + 1 < args.Length && int.TryParse(args[pi + 1], out var pv) ? pv : 4;
