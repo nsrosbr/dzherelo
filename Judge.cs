@@ -39,11 +39,11 @@ public static class Judge
     }
 
     /// <summary>Три прогони, більшість. null — модель не відповіла жодного разу.</summary>
-    public static async Task<Judgement?> ClassifyAsync(string model, string title, string hint, CancellationToken ct)
+    public static async Task<Judgement?> ClassifyAsync(string model, string title, string hint, CancellationToken ct, int runs = 3)
     {
         if (!Ready) return null;
         var votes = new List<Judgement>();
-        for (int i = 0; i < 3; i++)
+        for (int i = 0; i < Math.Max(1, runs); i++)
         {
             var one = await OnceAsync(model, title, hint, ct);
             if (one != null) votes.Add(one);
@@ -58,8 +58,8 @@ public static class Judge
     /// <summary>
     /// Пакетний прогін суджень із станом на диску: обрив мережі чи зупинка не коштують уже зробленого.
     /// </summary>
-    public static int RunAll(Catalog store, string statePath, string model, int limit,
-        Action<string> log, Action<int, int>? progress, CancellationToken ct)
+    public static async Task<int> RunAll(Catalog store, string statePath, string model, int limit,
+        Action<string> log, Action<int, int>? progress, CancellationToken ct, int parallel = 4, int runs = 3)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(statePath)!);
         var done = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -83,66 +83,58 @@ public static class Judge
             .Take(limit <= 0 ? int.MaxValue : limit)
             .ToList();
 
-        log($"до обробки: {todo.Count} (уже зроблено раніше: {done.Count})");
-        int ok = 0, failed = 0, streak = 0, cycle = 0;
+        log($"до обробки: {todo.Count} (уже зроблено раніше: {done.Count}), паралельно: {parallel}, прогонів на документ: {runs}");
 
+        int ok = 0, failed = 0;
+        var stateLock = new object();
         using var stateFile = new StreamWriter(statePath, append: true) { AutoFlush = true };
+        var gate = new SemaphoreSlim(Math.Max(1, parallel));
+
         void Mark(string sha, bool success, int attempts, string why)
-            => stateFile.WriteLine(JsonSerializer.Serialize(new
-            {
-                sha, ok = success, model, ts = DateTime.UtcNow.ToString("o"), attempts, why
-            }));
-
-        for (int i = 0; i < todo.Count; i++)
         {
-            ct.ThrowIfCancellationRequested();
-            var doc = todo[i];
-            var name = string.IsNullOrWhiteSpace(doc.Title) ? Path.GetFileNameWithoutExtension(doc.Path) : doc.Title;
-            Judgement? j = null;
-            int attempt = 0;
-            string why = "";
-
-            while (attempt < 3 && j == null)
-            {
-                attempt++;
-                try { j = ClassifyAsync(model, name, doc.Path, ct).GetAwaiter().GetResult(); }
-                catch (Exception ex) { why = ex.Message; }
-                if (j == null && attempt < 3)
-                {
-                    var pause = attempt == 1 ? 2000 : 10000;
-                    Thread.Sleep(pause);
-                }
-            }
-
-            if (j != null)
-            {
-                doc.Type = j.Type;
-                doc.Topic = j.Topic == "none" ? "" : j.Topic;
-                doc.Lang = j.Lang;
-                store.Add(doc);
-                Mark(doc.Key, true, attempt, "");
-                ok++; streak = 0;
-                log($"  ✓ [{i + 1}/{todo.Count}] {Short(name)} → {j.Type} / {(doc.Topic.Length == 0 ? "—" : doc.Topic)} / {j.Lang}");
-            }
-            else
-            {
-                Mark(doc.Key, false, attempt, why);
-                failed++; streak++;
-                log($"  ? [{i + 1}/{todo.Count}] {Short(name)} — {why}");
-
-                // мережа сиплеться: робимо паузу й пробуємо цикл, але не вічно
-                if (streak >= 10)
-                {
-                    cycle++;
-                    if (cycle >= 3) { log("мережа не відновлюється — зупиняюсь, стан збережено"); return 3; }
-                    log($"  10 підряд невдач — пауза 60 с (цикл {cycle}/3)");
-                    Thread.Sleep(60_000);
-                    streak = 0;
-                }
-            }
-
-            progress?.Invoke(i + 1, todo.Count);
+            var line = JsonSerializer.Serialize(new { sha, ok = success, model, ts = DateTime.UtcNow.ToString("o"), attempts, why });
+            lock (stateLock) stateFile.WriteLine(line);
         }
+
+        var tasks = todo.Select(async (doc, idx) =>
+        {
+            await gate.WaitAsync(ct);
+            try
+            {
+                ct.ThrowIfCancellationRequested();
+                var name = string.IsNullOrWhiteSpace(doc.Title) ? Path.GetFileNameWithoutExtension(doc.Path) : doc.Title;
+                Judgement? j = null; int attempt = 0; string why = "";
+
+                while (attempt < 3 && j == null)
+                {
+                    attempt++;
+                    try { j = await ClassifyAsync(model, name, doc.Path, ct, runs); }
+                    catch (Exception ex) { why = ex.Message; }
+                    if (j == null && attempt < 3) await Task.Delay(attempt == 1 ? 2000 : 10000, ct);
+                }
+
+                if (j != null)
+                {
+                    doc.Type = j.Type;
+                    doc.Topic = j.Topic == "none" ? "" : j.Topic;
+                    doc.Lang = j.Lang;
+                    lock (stateLock) store.Add(doc);      // каталог уже з власним локом, але тримаємо порядок
+                    Mark(doc.Key, true, attempt, "");
+                    Interlocked.Increment(ref ok);
+                    log($"  ✓ {Short(name)} → {j.Type} / {(doc.Topic.Length == 0 ? "—" : doc.Topic)} / {j.Lang}");
+                }
+                else
+                {
+                    Mark(doc.Key, false, attempt, why);
+                    Interlocked.Increment(ref failed);
+                    log($"  ? {Short(name)} — {why}");
+                }
+            }
+            finally { gate.Release(); }
+        });
+
+        try { await Task.WhenAll(tasks); }
+        catch (OperationCanceledException) { log("зупинено — стан збережено"); return 3; }
 
         log($"готово: успішно {ok}, невдач {failed} | токенів: вхід {TokensIn:N0}, вихід {TokensOut:N0}");
         return failed > 0 ? 1 : 0;

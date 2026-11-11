@@ -71,7 +71,7 @@ internal static class Program
         if (args.Length > 0 && (args[0].StartsWith("--") || args[0].StartsWith("/")))
         {
             string[] known = { "--setup", "--install", "--uninstall", "--selftest", "--collect", "--list",
-                               "--relayout", "--probe", "--reindex", "--revert-adapter", "--topics", "--canon", "--help", "-h", "/?", "--set-secret", "--get-secret-check", "--secret-b64", "--update", "--check", "--force", "--about", "--preview", "--models", "--judge", "--model", "--fetch", "--import", "--judge-all", "--review-kimi" };
+                               "--relayout", "--probe", "--reindex", "--revert-adapter", "--topics", "--canon", "--help", "-h", "/?", "--set-secret", "--get-secret-check", "--secret-b64", "--update", "--check", "--force", "--about", "--preview", "--models", "--judge", "--model", "--fetch", "--import", "--judge-all", "--review-kimi", "--parallel", "--runs", "--limit", "--backfill-date" };
             if (!known.Contains(args[0], StringComparer.OrdinalIgnoreCase))
             {
                 AttachConsole(-1);
@@ -129,6 +129,14 @@ internal static class Program
             Console.WriteLine(Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(v)));
             return 0;
         }
+        if (args.Any(a => a.Equals("--backfill-date", StringComparison.OrdinalIgnoreCase)))
+        {
+            var broot = App.Root(null);
+            using var bstore = new Catalog(broot);
+            var (filled, skipped) = Backfill.Dates(bstore, Console.WriteLine);
+            return filled > 0 ? 0 : 1;
+        }
+
         if (args.Any(a => a.Equals("--review-kimi", StringComparison.OrdinalIgnoreCase)))
         {
             var ri = Array.FindIndex(args, a => a.Equals("--model", StringComparison.OrdinalIgnoreCase));
@@ -152,8 +160,13 @@ internal static class Program
             using var catAll = new Catalog(rootAll);
             var stateAll = Path.Combine(rootAll, "state", "judge-state.jsonl");
             Console.WriteLine($"модель: {modelAll} | стан: {stateAll}");
+            var pi = Array.FindIndex(args, a => a.Equals("--parallel", StringComparison.OrdinalIgnoreCase));
+            var par = pi >= 0 && pi + 1 < args.Length && int.TryParse(args[pi + 1], out var pv) ? pv : 4;
+            var ri2 = Array.FindIndex(args, a => a.Equals("--runs", StringComparison.OrdinalIgnoreCase));
+            var runsN = ri2 >= 0 && ri2 + 1 < args.Length && int.TryParse(args[ri2 + 1], out var rv) ? rv : 3;
+
             return Judge.RunAll(catAll, stateAll, modelAll, limitAll,
-                s => Console.WriteLine(s), null, default);
+                s => Console.WriteLine(s), null, default, par, runsN).GetAwaiter().GetResult();
         }
 
         if (args.Any(a => a.Equals("--judge", StringComparison.OrdinalIgnoreCase)))
