@@ -36,4 +36,20 @@ public static class Backfill
         log($"дати відновлено: {filled}, без змін: {skipped}");
         return (filled, skipped);
     }
+
+    // Форма документа для всіх записів — правило з назви, без виклику моделі.
+    public static int Forms(Catalog store, Action<string> log)
+    {
+        int n = 0;
+        foreach (var d in store.All().ToList())
+        {
+            var f = Naming.FormOf(string.IsNullOrWhiteSpace(d.Title) ? d.Path : d.Title);
+            if (f.Length == 0 || f == d.Form) continue;
+            d.Form = f;
+            store.Add(d);
+            n++;
+        }
+        log($"форм проставлено: {n}");
+        return n;
+    }
 }

@@ -71,7 +71,7 @@ internal static class Program
         if (args.Length > 0 && (args[0].StartsWith("--") || args[0].StartsWith("/")))
         {
             string[] known = { "--setup", "--install", "--uninstall", "--selftest", "--collect", "--list",
-                               "--relayout", "--probe", "--reindex", "--revert-adapter", "--topics", "--canon", "--help", "-h", "/?", "--set-secret", "--get-secret-check", "--secret-b64", "--update", "--check", "--force", "--about", "--preview", "--models", "--judge", "--model", "--fetch", "--import", "--judge-all", "--review-kimi", "--parallel", "--runs", "--limit", "--backfill-date", "--state", "--topics-candidates", "--topics-promote" };
+                               "--relayout", "--probe", "--reindex", "--revert-adapter", "--topics", "--canon", "--help", "-h", "/?", "--set-secret", "--get-secret-check", "--secret-b64", "--update", "--check", "--force", "--about", "--preview", "--models", "--judge", "--model", "--fetch", "--import", "--judge-all", "--review-kimi", "--parallel", "--runs", "--limit", "--backfill-date", "--state", "--topics-candidates", "--topics-promote", "--classify-forms" };
             if (!known.Contains(args[0], StringComparer.OrdinalIgnoreCase))
             {
                 AttachConsole(-1);
@@ -153,6 +153,14 @@ internal static class Program
             var proot = App.Root(null);
             using var pstore = new Catalog(proot);
             TopicTaxonomy.Promote(proot, label, id, name, pstore, Console.WriteLine);
+            return 0;
+        }
+
+        if (args.Any(a => a.Equals("--classify-forms", StringComparison.OrdinalIgnoreCase)))
+        {
+            var froot = App.Root(null);
+            using var fstore = new Catalog(froot);
+            Backfill.Forms(fstore, Console.WriteLine);
             return 0;
         }
 

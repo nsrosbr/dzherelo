@@ -27,6 +27,7 @@ public sealed class DocRecord
     public string TypeSource { get; set; } = "rule";
     public string Classification { get; set; } = "open";
     public string Topic { get; set; } = "";
+    public string Form { get; set; } = "";          // форма документа: наказ, інструкція, чек-лист…
     public string TopicSource { get; set; } = "rule";
     public List<string> SubjectPath { get; set; } = new();
     public string Series { get; set; } = "";
@@ -181,6 +182,7 @@ public sealed class Catalog : IDisposable
         if (o["section"] is JsonNode sec && sec.GetValueKind() == JsonValueKind.String) d.Section = sec.GetValue<string>() ?? "";
         if (o["years"] is JsonNode y && y.GetValueKind() == JsonValueKind.Number) d.Year = y.GetValue<int>();
         if (o["topic"] is JsonArray ta && ta.Count > 0) d.Topic = ta[0]?.ToString() ?? "";
+        if (o["form"] is JsonNode fm && fm.GetValueKind() == JsonValueKind.String) d.Form = fm.GetValue<string>() ?? "";
         if (o["subject_path"] is JsonArray sa) foreach (var t in sa) if (t is not null) d.SubjectPath.Add(t.ToString());
         if (o["mirrors"] is JsonArray ma) foreach (var t in ma) if (t is not null) d.Mirrors.Add(t.ToString());
         if (o["checks"] is JsonObject ck)
@@ -324,6 +326,7 @@ public sealed class Catalog : IDisposable
         o["status"] = d.Status;
         o["path"] = d.Path.Replace('\\', '/');
         o["topic"] = string.IsNullOrWhiteSpace(d.Topic) ? new JsonArray() : new JsonArray(d.Topic);
+        o["form"] = d.Form;
         o["topic_source"] = d.TopicSource;
         o["subject_path"] = ToArr(d.SubjectPath);
         o["mirrors"] = ToArr(d.Mirrors);

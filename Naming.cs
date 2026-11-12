@@ -105,4 +105,31 @@ public static class Naming
         if (d.Length > MaxPath) d = d[..MaxPath].TrimEnd('\\', '/');
         return d;
     }
+
+    // Форма документа — це не тема (про що), а жанр (що це за папір).
+    // Визначається з назви, без моделі: довідники й чек-листи не мають теми, але мають місце в базі.
+    public static string FormOf(string title)
+    {
+        var t = (title ?? "").ToLowerInvariant();
+        if (t.Length == 0) return "";
+        if (t.Contains("чек")) return "checklist";
+        if (t.Contains("наказ")) return "nakaz";
+        if (t.Contains("директив")) return "dyrektyva";
+        if (t.Contains("розпорядж")) return "rozporiadzhennia";
+        if (t.Contains("інструкц") || t.Contains("инструкц")) return "instruktsiia";
+        if (t.Contains("настанова") || t.Contains("настанов")) return "nastanova";
+        if (t.Contains("посібник") || t.Contains("пособие")) return "posibnyk";
+        if (t.Contains("керівництв") || t.Contains("руководств")) return "kerivnytstvo";
+        if (t.Contains("статут")) return "statut";
+        if (t.Contains("методичн")) return "metodychni";
+        if (t.Contains("програм")) return "prohrama";
+        if (t.Contains("план")) return "plan";
+        if (t.Contains("перелік") || t.Contains("перечень")) return "perelik";
+        if (t.Contains("обов'язк") || t.Contains("обов’язк") || t.Contains("обязанност")) return "oboviazky";
+        if (t.Contains("довідник") || t.Contains("справочник")) return "dovidnyk";
+        if (t.Contains("донесен") || t.Contains("звіт") || t.Contains("отчет")) return "zvit";
+        if (t.Contains("додаток") || t.Contains("приложение")) return "dodatok";
+        if (t.Contains("характеристик")) return "tekhnichni-kharakterystyky";
+        return "";
+    }
 }
