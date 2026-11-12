@@ -13,7 +13,15 @@ public sealed class AppSettings
     public bool CheckUpdatesOnStart { get; set; } = true;
 
     // Модель для суджень (тип/тема/мова). Порожньо — судження вимкнені.
-    public string Model { get; set; } = "";
+    public string Model { get; set; } = "";            // сумісність: = ModelJudge
+    // Три ролі. Одна модель не робить усе добре: розмітка, копання в джерелі й каталогізація — різні задачі.
+    public string ModelJudge { get; set; } = "";       // що це за документ (тип, тема, мова)
+    public string ModelProbe { get; set; } = "";       // доки не докопаємось: чи джерело віддає те, що треба
+    public string ModelCatalog { get; set; } = "";     // куди це покласти: рубрики, нові категорії
+
+    public string JudgeModel => string.IsNullOrWhiteSpace(ModelJudge) ? (string.IsNullOrWhiteSpace(Model) ? "deepseek/deepseek-chat" : Model) : ModelJudge;
+    public string ProbeModel => string.IsNullOrWhiteSpace(ModelProbe) ? JudgeModel : ModelProbe;
+    public string CatalogModel => string.IsNullOrWhiteSpace(ModelCatalog) ? JudgeModel : ModelCatalog;
 
     // Ключ OpenRouter і логіни проксі живуть у DPAPI (Secrets), а не в settings.json (§18, SPEC v0.1 §44).
     // [JsonIgnore] + читання/запис через Secrets — ключ ніколи не потрапляє у серіалізовані налаштування.

@@ -1,4 +1,6 @@
 using System.Runtime.InteropServices;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace Dzherelo;
 
@@ -71,7 +73,7 @@ internal static class Program
         if (args.Length > 0 && (args[0].StartsWith("--") || args[0].StartsWith("/")))
         {
             string[] known = { "--setup", "--install", "--uninstall", "--selftest", "--collect", "--list",
-                               "--relayout", "--probe", "--reindex", "--revert-adapter", "--topics", "--canon", "--help", "-h", "/?", "--set-secret", "--get-secret-check", "--secret-b64", "--update", "--check", "--force", "--about", "--preview", "--models", "--judge", "--model", "--fetch", "--import", "--judge-all", "--review-kimi", "--parallel", "--runs", "--limit", "--backfill-date", "--state", "--topics-candidates", "--topics-promote", "--classify-forms" };
+                               "--relayout", "--probe", "--reindex", "--revert-adapter", "--topics", "--canon", "--help", "-h", "/?", "--set-secret", "--get-secret-check", "--secret-b64", "--update", "--check", "--force", "--about", "--preview", "--models", "--judge", "--model", "--fetch", "--import", "--judge-all", "--review-kimi", "--parallel", "--runs", "--limit", "--backfill-date", "--state", "--topics-candidates", "--topics-promote", "--classify-forms", "--rubrics", "--structure", "--plan-catalog" };
             if (!known.Contains(args[0], StringComparer.OrdinalIgnoreCase))
             {
                 AttachConsole(-1);
@@ -153,6 +155,59 @@ internal static class Program
             var proot = App.Root(null);
             using var pstore = new Catalog(proot);
             TopicTaxonomy.Promote(proot, label, id, name, pstore, Console.WriteLine);
+            return 0;
+        }
+
+        if (args.Any(a => a.Equals("--plan-catalog", StringComparison.OrdinalIgnoreCase)))
+        {
+            var s2 = AppSettings.Load();
+            var oi2 = Array.FindIndex(args, a => a.Equals("--out", StringComparison.OrdinalIgnoreCase));
+            var croot = App.Root(oi2 >= 0 && oi2 + 1 < args.Length ? args[oi2 + 1] : null);
+            var result = CatalogPlan.PlanAsync(croot, "", s2.CatalogModel, default, Console.WriteLine).GetAwaiter().GetResult();
+            return result == null ? 1 : 0;
+        }
+
+        if (args.Any(a => a.Equals("--structure", StringComparison.OrdinalIgnoreCase)))
+        {
+            var si2 = Array.FindIndex(args, a => a.Equals("--structure", StringComparison.OrdinalIgnoreCase));
+            var wanted = si2 + 1 < args.Length && !args[si2 + 1].StartsWith("--") ? args[si2 + 1] : "all";
+            var oroot = App.Root(null);
+            var srcs = Registry.Load().Where(x => wanted == "all" || x.Id == wanted).ToList();
+            if (srcs.Count == 0) { Console.WriteLine("немає такого джерела: " + wanted); return 2; }
+
+            using var sf = new Fetcher();
+            var outPath0 = Path.Combine(oroot, "library", ".state", "structure.json");
+            var all = (File.Exists(outPath0) ? JsonNode.Parse(File.ReadAllText(outPath0)) as JsonObject : null) ?? new JsonObject();
+            foreach (var s in srcs)
+            {
+                var tree = Structure.FetchAsync(s, sf, default).GetAwaiter().GetResult();
+                if (tree == null) { Console.WriteLine($"  {s.Id}: рубрик не віддає ({s.Kind})"); continue; }
+                all[s.Id] = tree;
+                Console.WriteLine($"  {s.Id}: {tree.Count(kv => kv.Key != "_n")} верхніх рубрик");
+            }
+            var outPath = Path.Combine(oroot, "library", ".state", "structure.json");
+            Directory.CreateDirectory(Path.GetDirectoryName(outPath)!);
+            File.WriteAllText(outPath, all.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+            Console.WriteLine("структура: " + outPath);
+            return 0;
+        }
+
+        if (args.Any(a => a.Equals("--rubrics", StringComparison.OrdinalIgnoreCase)))
+        {
+            var oi = Array.FindIndex(args, a => a.Equals("--out", StringComparison.OrdinalIgnoreCase));
+            var rroot = App.Root(oi >= 0 && oi + 1 < args.Length ? args[oi + 1] : null);
+            using var rstore = new Catalog(rroot);
+            var tree = Rubrics.Build(rstore);
+            Rubrics.Save(rroot, tree);
+            var only = Array.FindIndex(args, a => a.Equals("--rubrics", StringComparison.OrdinalIgnoreCase));
+            var filter = only >= 0 && only + 1 < args.Length && !args[only + 1].StartsWith("--") ? args[only + 1] : null;
+            Console.WriteLine("рубрики записано: " + Rubrics.PathFor(rroot));
+            foreach (var kv in tree.Where(kv => filter == null || kv.Key.Contains(filter, StringComparison.OrdinalIgnoreCase)))
+            {
+                if (kv.Value is not JsonObject o) continue;
+                Console.WriteLine($"\n{kv.Key}");
+                Rubrics.Print(o, Console.WriteLine, "  ");
+            }
             return 0;
         }
 

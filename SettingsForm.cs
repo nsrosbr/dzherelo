@@ -13,6 +13,7 @@ internal sealed class SettingsForm : ThemedForm
     private TextBox _txtSince = null!;
     private ComboBox _theme = null!;
     private ComboBox _cbModel = null!;
+    private ComboBox _cbProbe = null!, _cbCatalog = null!;
     private Label _lblModels = null!;
     private Label _lblVersion = null!;
 
@@ -137,20 +138,30 @@ internal sealed class SettingsForm : ThemedForm
         card3.Controls.Add(Ui.Caption("Порожнє поле = ключ видалено. Модельні судження без ключа не працюють, решта — працює.", Pad, 64, CardW - 2 * Pad));
 
         AddDivider(card3, 88);
-        card3.Controls.Add(Ui.Body("Модель:", Pad, 98, 90));
-        _cbModel = new ThemedCombo { Left = Pad + 96, Top = 95, Width = CardW - 2 * Pad - 96 - 150, Font = Theme.Body };
+        // Три ролі: одна модель не робить усе добре — розмітка, копання в джерелі й каталогізація різні.
+        card3.Controls.Add(Ui.Body("Судження:", Pad, 98, 110));
+        _cbModel = new ThemedCombo { Left = Pad + 112, Top = 95, Width = CardW - 2 * Pad - 112 - 150, Font = Theme.Body };
         card3.Controls.Add(_cbModel);
+
+        card3.Controls.Add(Ui.Body("Копання:", Pad, 136, 110));
+        _cbProbe = new ThemedCombo { Left = Pad + 112, Top = 133, Width = CardW - 2 * Pad - 112 - 150, Font = Theme.Body };
+        card3.Controls.Add(_cbProbe);
+
+        card3.Controls.Add(Ui.Body("Каталог:", Pad, 174, 110));
+        _cbCatalog = new ThemedCombo { Left = Pad + 112, Top = 171, Width = CardW - 2 * Pad - 112 - 150, Font = Theme.Body };
+        card3.Controls.Add(_cbCatalog);
+
         var bModels = new Button { Text = "Оновити список", Left = CardW - Pad - 140, Top = 92, Width = 140 };
         Ui.StyleSecondary(bModels);
         bModels.Click += async (_, _) => await LoadModelsAsync();
         card3.Controls.Add(bModels);
-        var bCheckKey = new Button { Text = "Перевірити ключ", Left = Pad, Top = 132, Width = 160 };
+        var bCheckKey = new Button { Text = "Перевірити ключ", Left = Pad, Top = 208, Width = 160 };
         Ui.StyleSecondary(bCheckKey);
         bCheckKey.Click += async (_, _) => await CheckKeyAsync();
         card3.Controls.Add(bCheckKey);
-        _lblModels = Ui.Caption("", Pad + 170, 138, CardW - 2 * Pad - 170);
+        _lblModels = Ui.Caption("", Pad + 170, 214, CardW - 2 * Pad - 170);
         card3.Controls.Add(_lblModels);
-        FinishCard(card3, 166);
+        FinishCard(card3, 244);
         y += card3.Height + 18;
 
         // ---- Про програму ----
@@ -197,11 +208,16 @@ internal sealed class SettingsForm : ThemedForm
         try
         {
             var list = await Judge.ModelsAsync(default);
-            var keep = _cbModel.Text;
-            _cbModel.Items.Clear();
-            foreach (var m in list) _cbModel.Items.Add(m);
+            string keep = _cbModel.Text, keepP = _cbProbe.Text, keepC = _cbCatalog.Text;
+            foreach (var cb in new[] { _cbModel, _cbProbe, _cbCatalog })
+            {
+                cb.Items.Clear();
+                foreach (var m in list) cb.Items.Add(m);
+            }
             _lblModels.Text = "моделей: " + list.Count;
             if (!string.IsNullOrWhiteSpace(keep) && list.Contains(keep)) _cbModel.SelectedItem = keep;
+            if (!string.IsNullOrWhiteSpace(keepP) && list.Contains(keepP)) _cbProbe.SelectedItem = keepP;
+            if (!string.IsNullOrWhiteSpace(keepC) && list.Contains(keepC)) _cbCatalog.SelectedItem = keepC;
             else if (!string.IsNullOrWhiteSpace(_cfg.Model) && list.Contains(_cfg.Model)) _cbModel.SelectedItem = _cfg.Model;
         }
         catch (Exception ex)
@@ -214,7 +230,10 @@ internal sealed class SettingsForm : ThemedForm
     private async Task CheckKeyAsync()
     {
         Secrets.Set("openrouter.key", _txtKey.Text.Trim());
-        _cfg.Model = (_cbModel.SelectedItem?.ToString() ?? _cbModel.Text).Trim();
+        _cfg.ModelJudge = (_cbModel.SelectedItem?.ToString() ?? _cbModel.Text).Trim();
+        _cfg.ModelProbe = (_cbProbe.SelectedItem?.ToString() ?? _cbProbe.Text).Trim();
+        _cfg.ModelCatalog = (_cbCatalog.SelectedItem?.ToString() ?? _cbCatalog.Text).Trim();
+        _cfg.Model = _cfg.ModelJudge;
         if (!Judge.Ready) { Ui.Msg("Ключ порожній.", Ui.Name, MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
         try
         {

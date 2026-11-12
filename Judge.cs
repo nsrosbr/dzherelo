@@ -149,6 +149,45 @@ public static class Judge
 
     private static string Short(string s) => s.Length <= 60 ? s : s[..60] + "…";
 
+    // Спільний виклик моделі зі схемою: ним користуються і судження, і каталогізатор.
+    public static async Task<JsonNode?> AskJsonAsync(string model, string system, string user, JsonObject schema, CancellationToken ct, int maxTokens = 400)
+    {
+        var body = new JsonObject
+        {
+            ["model"] = model,
+            ["temperature"] = 0,
+            ["max_tokens"] = maxTokens,
+            ["messages"] = new JsonArray(
+                new JsonObject { ["role"] = "system", ["content"] = system },
+                new JsonObject { ["role"] = "user", ["content"] = user }),
+            ["response_format"] = new JsonObject
+            {
+                ["type"] = "json_schema",
+                ["json_schema"] = new JsonObject { ["name"] = "answer", ["strict"] = true, ["schema"] = schema },
+            },
+        };
+
+        var req = new HttpRequestMessage(HttpMethod.Post, "https://openrouter.ai/api/v1/chat/completions")
+        {
+            Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json"),
+        };
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", Key);
+        req.Headers.TryAddWithoutValidation("HTTP-Referer", "https://nsrosbr.github.io/dzherelo");
+        req.Headers.TryAddWithoutValidation("X-Title", "Dzherelo");
+
+        using var resp = await Http.SendAsync(req, ct);
+        if (!resp.IsSuccessStatusCode) return null;
+        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
+        if (doc.RootElement.TryGetProperty("usage", out var usage))
+        {
+            if (usage.TryGetProperty("prompt_tokens", out var pi)) Interlocked.Add(ref TokensIn, pi.GetInt64());
+            if (usage.TryGetProperty("completion_tokens", out var co)) Interlocked.Add(ref TokensOut, co.GetInt64());
+        }
+        var content = doc.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString();
+        if (string.IsNullOrWhiteSpace(content)) return null;
+        try { return JsonNode.Parse(content); } catch { return null; }
+    }
+
     private static async Task<Judgement?> OnceAsync(string model, string title, string hint, CancellationToken ct)
     {
         var schema = new JsonObject
