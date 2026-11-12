@@ -106,6 +106,31 @@ public static class Naming
         return d;
     }
 
+    // Дзеркало джерела: тека повторює шлях URL, а не нашу вигадану схему.
+    // Так бібліотека успадковує порядок першоджерела; каталог лишається індексом поверх нього.
+    public static string MirrorDir(string library, string source, string url)
+    {
+        var srcDir = Path.Combine(library, Slug(source));
+        if (!Uri.TryCreate(url ?? "", UriKind.Absolute, out var u)) return srcDir;
+
+        var segs = u.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries)
+            .Select(x => Slug(x))
+            .Where(x => x.Length > 0)
+            .ToList();
+        if (segs.Count > 0) segs.RemoveAt(segs.Count - 1);          // останній сегмент — ім'я файлу, його даємо своє
+
+        // Windows: довгі шляхи рвуться — тримаємо бюджет і зрізаємо хвіст
+        var kept = new List<string>();
+        int budget = 150;
+        foreach (var seg in segs)
+        {
+            if (budget - seg.Length < 0) break;
+            kept.Add(seg.Length > 40 ? seg[..40] : seg);
+            budget -= Math.Min(seg.Length, 40) + 1;
+        }
+        return Path.Combine(new[] { srcDir }.Concat(kept).ToArray());
+    }
+
     // Форма документа — це не тема (про що), а жанр (що це за папір).
     // Визначається з назви, без моделі: довідники й чек-листи не мають теми, але мають місце в базі.
     public static string FormOf(string title)

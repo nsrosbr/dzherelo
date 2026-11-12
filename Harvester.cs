@@ -402,7 +402,7 @@ public sealed class Harvester
             if (title.Length == 0) title = Adapters.PageTitle(html);
             if (date.Length == 0) date = Adapters.PageDate(html);
             if (topic.Length == 0) topic = TopicOf(title);
-            dir = store.DirFor(s.Name, type, date);
+            dir = Naming.MirrorDir(store.Library, s.Name, d.Url);
             var pdf = Adapters.FirstPdf(html, d.Url);
             if (pdf != null && !string.IsNullOrWhiteSpace(s.PdfInclude)
                 && !System.Text.RegularExpressions.Regex.IsMatch(pdf, s.PdfInclude!, System.Text.RegularExpressions.RegexOptions.IgnoreCase))
@@ -435,7 +435,7 @@ public sealed class Harvester
         else
         {
             targetUrl = d.Url;
-            dir = store.DirFor(s.Name, type, date);
+            dir = Naming.MirrorDir(store.Library, s.Name, d.Url);
             try { saved = await DownloadAsync(d.Url, dir, FileName(title, d.Url, s.Name, dir), s, fetch, ct); }
             catch (LoginRequiredException) { Gate(r, d.Url, "🔒 потрібен вхід", "PAYWALL"); return; }
             catch (NotFoundException ex) { Fail(r, d.Url, ex.Message, "NOT_FOUND"); return; }
@@ -556,7 +556,7 @@ public sealed class Harvester
 
                 known.TryGetValue(e.Library, out var src);
                 var name = Naming.BaseName(null, Path.GetFileNameWithoutExtension(uri.AbsolutePath));
-                var dir = store.DirFor(src?.Name ?? e.Library, "other", null);
+                var dir = store.DirFor(src?.Name ?? e.Library, "other", null);   // у черги нема URL — тримаємо стару схему
                 Directory.CreateDirectory(dir);
 
                 var saved = await fetch.DownloadAsync(e.QueueKey, dir, name, src?.Rps ?? 1, ct);
@@ -721,7 +721,7 @@ public sealed class Harvester
             var type = string.IsNullOrWhiteSpace(r.Type) ? (src != null ? TypeOf(src, r.Url) : "інше") : r.Type;
             var topic = string.IsNullOrWhiteSpace(r.Topic) ? TopicOf(r.Title) : r.Topic;
             var abs = Path.Combine(store.Library, r.Path);          // у каталозі шлях відносний
-            var target = Path.Combine(store.DirFor(r.Source, type, r.Date), Path.GetFileName(abs));
+            var target = Path.Combine(Naming.MirrorDir(store.Library, r.Source, r.Url), Path.GetFileName(abs));
             if (!string.Equals(Path.GetFullPath(target), Path.GetFullPath(abs), StringComparison.OrdinalIgnoreCase))
             {
                 if (!File.Exists(abs)) { missing++; continue; }

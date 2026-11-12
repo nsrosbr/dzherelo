@@ -88,6 +88,9 @@ public static class Selftest
         var report = new StringBuilder();
         Check("UI: перемикання теми дає один набір кольорів", UiThemeConsistent());
         Check("каталог: date і section переживають перезавантаження", CatalogRoundTripKeepsDateAndSection());
+        var mir = Naming.MirrorDir(Path.GetTempPath(), "ISW", "https://www.understandingwar.org/backgrounder/russian-offensive-campaign-assessment").Replace('\\', '/');
+        Check("дзеркало: тека повторює шлях джерела, без імені файлу",
+            mir.ToLowerInvariant().EndsWith("/isw/backgrounder"), mir);
 
         void Log(string s) { try { Console.WriteLine(s); } catch { } report.AppendLine(s); }
         void Check(string name, bool ok, string detail = "")
