@@ -178,17 +178,18 @@ internal static class Program
             using var sf = new Fetcher();
             var outPath0 = Path.Combine(oroot, "library", ".state", "structure.json");
             var all = (File.Exists(outPath0) ? JsonNode.Parse(File.ReadAllText(outPath0)) as JsonObject : null) ?? new JsonObject();
+            var skipped = new List<string>();
             foreach (var s in srcs)
             {
                 var tree = Structure.FetchAsync(s, sf, default).GetAwaiter().GetResult();
-                if (tree == null) { Console.WriteLine($"  {s.Id}: рубрик не віддає ({s.Kind})"); continue; }
+                if (tree == null) { skipped.Add(s.Id); continue; }
                 all[s.Id] = tree;
                 Console.WriteLine($"  {s.Id}: {tree.Count(kv => kv.Key != "_n")} верхніх рубрик");
             }
             var outPath = Path.Combine(oroot, "library", ".state", "structure.json");
             Directory.CreateDirectory(Path.GetDirectoryName(outPath)!);
             File.WriteAllText(outPath, all.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
-            Console.WriteLine("структура: " + outPath);
+            Console.WriteLine($"структура: {outPath} | джерел: {all.Count}, без рубрик: {skipped.Count}");
             return 0;
         }
 

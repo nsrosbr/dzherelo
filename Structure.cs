@@ -12,6 +12,8 @@ public static class Structure
 {
     public static async Task<JsonObject?> FetchAsync(Source s, Fetcher f, CancellationToken ct)
     {
+        // catalog/static/html/sitemap рубрик не мають за визначенням — не галасуємо про це
+        if (s.Kind is "catalog" or "static" or "html" or "sitemap") return null;
         try
         {
             return s.Kind switch
