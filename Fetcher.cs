@@ -179,9 +179,15 @@ public sealed class Fetcher : IDisposable
         await gate!.WaitAsync(ct);
         try
         {
+            var (allowed, robotsDelay, status) = await Robots.CheckAsync(url, ct);
+            if (!allowed) throw new BlockedException("robots.txt забороняє " + status.Replace("robots:", ""));
+            if (status.StartsWith("robots ") && status != "robots ok")
+                Console.WriteLine($"  · {host}: {status} — працюємо без правил robots");
+
             long last;
             lock (_lock) _lastHit.TryGetValue(host, out last);
             var interval = rps > 0 ? Math.Max(MinIntervalMs, 1000 / rps) : MinIntervalMs;
+            if (robotsDelay > interval) interval = robotsDelay;
             var wait = last + interval - Environment.TickCount64;
             if (wait > 0) await Task.Delay((int)wait, ct);
             lock (_lock) _lastHit[host] = Environment.TickCount64;
