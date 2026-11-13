@@ -13,6 +13,18 @@ public sealed class Source
     public string Kind { get; set; } = "";
     public string Url { get; set; } = "";
 
+    // Бібліотека — це сайт/сховище (хост). Записи на кшталт «APD TM 9» — не бібліотеки,
+    // а сторінки-рубрики всередині однієї бібліотеки armypubs.army.mil.
+    public string LibraryHost
+    {
+        get
+        {
+            if (Uri.TryCreate(Url ?? "", UriKind.Absolute, out var u))
+                return u.Host.Replace("www.", "", StringComparison.OrdinalIgnoreCase);
+            return string.IsNullOrWhiteSpace(Section) ? "—" : Section;
+        }
+    }
+
     public string? Set { get; set; }
     public string? Query { get; set; }
     public string? Prefix { get; set; }

@@ -262,6 +262,8 @@ internal sealed class SettingsForm : ThemedForm
         _cUpdates.Checked = _cfg.CheckUpdatesOnStart;
         _txtKey.Text = Secrets.Get("openrouter.key") ?? "";
         if (!string.IsNullOrWhiteSpace(_cfg.Model)) { _cbModel.Items.Add(_cfg.Model); _cbModel.SelectedItem = _cfg.Model; }
+        foreach (var (cb, val) in new[] { (_cbProbe, _cfg.ModelProbe), (_cbCatalog, _cfg.ModelCatalog) })
+            if (!string.IsNullOrWhiteSpace(val)) { cb.Items.Add(val); cb.SelectedItem = val; }
         _lblVersion.Text = Program.Version + " · канал: " + (Updater.IsConfigured ? "підключено" : "не налаштовано");
     }
 

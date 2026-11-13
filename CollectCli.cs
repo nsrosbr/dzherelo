@@ -22,7 +22,11 @@ public static class CollectCli
             foreach (var g in all.GroupBy(s => s.Section))
             {
                 Console.WriteLine(g.Key + ":");
-                foreach (var s in g) Console.WriteLine("  " + s.Id.PadRight(24) + s.Kind.PadRight(9) + s.Name);
+                foreach (var lib in g.GroupBy(s => s.LibraryHost).OrderBy(x => x.Key))
+                {
+                    Console.WriteLine("  " + lib.Key + "  (" + lib.Count() + " джерел)");
+                    foreach (var s in lib) Console.WriteLine("    " + s.Id.PadRight(24) + s.Kind.PadRight(9) + s.Name);
+                }
             }
             return 0;
         }

@@ -753,21 +753,40 @@ internal sealed class MainForm : ThemedForm
         _tree.BeginUpdate();
         _tree.Nodes.Clear();
         _nodes.Clear();
+        int libs = 0;
         foreach (var group in _sources.GroupBy(s => s.Section))
         {
             var section = new TreeNode(group.Key) { Tag = null };
-            foreach (var s in group)
+            foreach (var lib in group.GroupBy(s => s.LibraryHost).OrderBy(g => g.Key))
             {
-                var n = new TreeNode(s.Name) { Tag = s, Checked = !s.Manual, ToolTipText = s.Url };
-                _nodes[s.Id] = n;
-                section.Nodes.Add(n);
+                // один хост = одна бібліотека; усередині — її сторінки/рубрики
+                if (lib.Count() == 1)
+                {
+                    var only = lib.First();
+                    var n1 = new TreeNode(only.Name) { Tag = only, Checked = !only.Manual, ToolTipText = only.Url };
+                    _nodes[only.Id] = n1;
+                    section.Nodes.Add(n1);
+                }
+                else
+                {
+                    var libNode = new TreeNode($"{lib.Key}  ({lib.Count()})") { Tag = null, ToolTipText = lib.Key };
+                    foreach (var s in lib)
+                    {
+                        var n = new TreeNode(s.Name) { Tag = s, Checked = !s.Manual, ToolTipText = s.Url };
+                        _nodes[s.Id] = n;
+                        libNode.Nodes.Add(n);
+                    }
+                    libNode.Checked = lib.Any(x => !x.Manual);
+                    section.Nodes.Add(libNode);
+                    libs++;
+                }
             }
             section.Checked = group.Any(x => !x.Manual);
             _tree.Nodes.Add(section);
         }
         _tree.ExpandAll();
         _tree.EndUpdate();
-        _lblState.Text = $"{_sources.Count} джерел у {_tree.Nodes.Count} розділах";
+        _lblState.Text = $"{_sources.Count} джерел у {libs} бібліотеках, {_tree.Nodes.Count} розділах";
     }
 
     private int SinceYearValue() =>
@@ -802,9 +821,14 @@ internal sealed class MainForm : ThemedForm
         if (e.Action == TreeViewAction.Unknown) return;
         if (e.Node?.Tag != null) { UpdateRunLabel(); return; }   // лист: рахуємо позначені
         _tree.AfterCheck -= TreeAfterCheck;
-        if (e.Node != null) foreach (TreeNode c in e.Node.Nodes) c.Checked = e.Node.Checked;
+        if (e.Node != null) SetBranch(e.Node, e.Node.Checked);
         _tree.AfterCheck += TreeAfterCheck;
         UpdateRunLabel();
+    }
+
+    private void SetBranch(TreeNode node, bool on)
+    {
+        foreach (TreeNode c in node.Nodes) { c.Checked = on; SetBranch(c, on); }   // дерево трирівневе: розділ → бібліотека → джерело
     }
 
     private List<Source> Picked() =>
